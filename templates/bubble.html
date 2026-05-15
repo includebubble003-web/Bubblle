@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Bubble · Bubblle{% endblock %}
+{% block content %}
+<section class="panel chat-header">
+  <a href="/" class="back-link">← Back</a>
+  <h1 class="h1" id="bubble-title">Loading…</h1>
+  <div class="meta-row">
+    <span class="pill" id="bubble-expiry"></span>
+    <span class="pill pill-accent" id="online-count">0 online</span>
+  </div>
+  <p class="muted" id="bubble-sub"></p>
+</section>
+
+<section class="panel chat-wrap">
+  <div id="chat-status" class="banner banner-warn" hidden></div>
+  <div id="messages" class="messages" aria-live="polite"></div>
+  <div id="typing" class="typing muted" hidden></div>
+  <form id="chat-form" class="composer">
+    <input id="chat-input" autocomplete="off" maxlength="2000" placeholder="Message…" disabled />
+    <button class="btn btn-primary" type="submit" disabled>Send</button>
+  </form>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+  window.__BUBBLE_ID__ = "{{ bubble_id }}";
+</script>
+<script src="{% static 'js/bubble.js' %}" type="module"></script>
+{% endblock %}

@@ -1,0 +1,7 @@
+from django.apps import AppConfig
+
+
+class BubblesConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "bubbles"
+    verbose_name = "Geo bubbles & chat"
