@@ -13,7 +13,8 @@ from sessions_app.models import AnonymousSession
 
 from .models import Bubble, Message
 from .serializers import BubbleCreateSerializer, MessageCreateSerializer, MessageOutSerializer
-from .services import haversine_distance_m, serialize_bubble_summary, throttle_allow
+from .membership import membership_clear
+from .services import active_user_count, haversine_distance_m, serialize_bubble_summary, throttle_allow
 
 
 def _anonymous_session_for_request(request) -> AnonymousSession | None:
@@ -109,6 +110,7 @@ def bubble_detail(request, bubble_id: UUID):
     if bubble.is_expired() and bubble.active:
         bubble.active = False
         bubble.save(update_fields=["active"])
+        membership_clear(bubble.id)
 
     lat_q = request.GET.get("lat")
     lng_q = request.GET.get("lng")
@@ -120,6 +122,7 @@ def bubble_detail(request, bubble_id: UUID):
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         body = serialize_bubble_summary(bubble, lat, lng)
     else:
+        users = active_user_count(bubble.id) if bubble.is_joinable() else 0
         body = {
             "id": str(bubble.id),
             "title": bubble.title,
@@ -129,6 +132,8 @@ def bubble_detail(request, bubble_id: UUID):
             "expires_at": bubble.expires_at.isoformat(),
             "remaining_seconds": max(0, int((bubble.expires_at - timezone.now()).total_seconds())),
             "active": bubble.is_joinable(),
+            "active_users": users,
+            "online_count": users,
         }
 
     return Response(body)
