@@ -4,44 +4,50 @@
 {% block content %}
 <section class="panel">
   <h1 class="h1">Anonymous geo chat</h1>
-  <p class="muted">Create a temporary bubble. People nearby join instantly — no accounts.</p>
+  <p class="muted">Join a nearby bubble or start your own — no account needed.</p>
   <div id="loc-banner" class="banner banner-warn" hidden></div>
-  <button type="button" class="btn btn-primary" id="btn-locate">Use my location</button>
+</section>
+
+<section class="panel">
+  <h2 class="h2">Your name</h2>
+  <form id="name-form" class="form form-inline">
+    <label class="field field-grow">
+      <span>Display name in chat</span>
+      <input
+        id="display-name"
+        name="anonymous_name"
+        maxlength="64"
+        required
+        autocomplete="nickname"
+        placeholder="How others see you"
+      />
+    </label>
+    <button type="submit" class="btn btn-ghost" id="btn-save-name">Save</button>
+  </form>
+  <p class="muted fine-print" id="name-status" hidden></p>
 </section>
 
 <section class="panel">
   <h2 class="h2">Create bubble</h2>
+  <p class="muted">5 km radius · expires in 23 minutes</p>
   <form id="create-form" class="form">
     <label class="field">
       <span>Title</span>
       <input name="title" maxlength="120" required placeholder="Late-night park meet" />
     </label>
-    <label class="field">
-      <span>Radius (meters)</span>
-      <input name="radius" type="number" min="50" max="100000" value="500" required />
-    </label>
-    <label class="field">
-      <span>Expires in</span>
-      <select name="expires_in_seconds">
-        <option value="900">15 minutes</option>
-        <option value="3600" selected>1 hour</option>
-        <option value="14400">4 hours</option>
-        <option value="86400">24 hours</option>
-      </select>
-    </label>
     <input type="hidden" name="latitude" id="f-lat" />
     <input type="hidden" name="longitude" id="f-lng" />
-    <button class="btn btn-accent" type="submit" id="btn-create" disabled>Create</button>
+    <button class="btn btn-accent" type="submit" id="btn-create" disabled>Create bubble</button>
   </form>
 </section>
 
 <section class="panel">
   <div class="row spread">
-    <h2 class="h2">Nearby bubbles</h2>
+    <h2 class="h2">Bubbles within 5 km</h2>
     <button type="button" class="btn btn-ghost" id="btn-refresh">Refresh</button>
   </div>
   <ul id="bubble-list" class="bubble-list"></ul>
-  <p class="muted" id="empty-state">No bubbles yet. Create one or widen search.</p>
+  <p class="muted" id="empty-state">Getting your location…</p>
 </section>
 {% endblock %}
 {% block scripts %}

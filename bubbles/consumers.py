@@ -8,13 +8,8 @@ from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
 from .models import Bubble, Message
-from .services import (
-    bubble_channel_group,
-    haversine_distance_m,
-    online_count_decr,
-    online_count_incr,
-    throttle_allow,
-)
+from .membership import membership_join, membership_leave
+from .services import bubble_channel_group, haversine_distance_m, throttle_allow
 
 
 def _parse_float(qs: dict, key: str) -> float | None:
@@ -67,34 +62,31 @@ class BubbleConsumer(AsyncJsonWebsocketConsumer):
             await self.close(code=4403)
             return
 
+        self.connection_id = self.channel_name
         self.group_name = bubble_channel_group(self.bubble_id)
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
 
-        online = await sync_to_async(online_count_incr)(self.bubble_id)
+        active = await sync_to_async(membership_join)(self.bubble_id, self.connection_id)
+        await self._broadcast_presence("user_joined", active)
+
+    async def disconnect(self, code):
+        if self.group_name and self.bubble_id and getattr(self, "connection_id", None):
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+            active = await sync_to_async(membership_leave)(self.bubble_id, self.connection_id)
+            await self._broadcast_presence("user_left", active)
+
+    async def _broadcast_presence(self, event: str, active: int):
         await self.channel_layer.group_send(
             self.group_name,
             {
                 "type": "bubble.presence",
-                "event": "user_joined",
+                "event": event,
                 "name": self.user_name,
-                "online": online,
+                "online": active,
+                "active_users": active,
             },
         )
-
-    async def disconnect(self, code):
-        if self.group_name and self.bubble_id:
-            await self.channel_layer.group_discard(self.group_name, self.channel_name)
-            online = await sync_to_async(online_count_decr)(self.bubble_id)
-            await self.channel_layer.group_send(
-                self.group_name,
-                {
-                    "type": "bubble.presence",
-                    "event": "user_left",
-                    "name": self.user_name,
-                    "online": online,
-                },
-            )
 
     async def receive_json(self, content):
         if not self.group_name or not self.bubble_id:
@@ -167,12 +159,14 @@ class BubbleConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json({"type": "chat", "payload": event["message"]})
 
     async def bubble_presence(self, event):
+        active = event.get("active_users", event.get("online", 0))
         await self.send_json(
             {
                 "type": "presence",
                 "event": event["event"],
                 "name": event["name"],
-                "online": event["online"],
+                "online": active,
+                "active_users": active,
             }
         )
 
@@ -194,8 +188,11 @@ class BubbleConsumer(AsyncJsonWebsocketConsumer):
         except Bubble.DoesNotExist:
             return None
         if b.is_expired() and b.active:
+            from .membership import membership_clear
+
             b.active = False
             b.save(update_fields=["active"])
+            membership_clear(bubble_id)
         return b
 
     @database_sync_to_async

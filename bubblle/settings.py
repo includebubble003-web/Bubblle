@@ -134,6 +134,10 @@ REST_FRAMEWORK = {
     ],
 }
 
+# Bubble defaults (create API — not exposed in UI)
+BUBBLLE_DEFAULT_RADIUS_M = 5_000  # 5 km geofence
+BUBBLLE_DEFAULT_EXPIRES_SECONDS = 23 * 60  # 23 minutes
+
 # Django session cookie (CSRF / admin). Kept separate from anonymous chat identity.
 BUBBLLE_SESSION_COOKIE_NAME = "bbl_anon"
 SESSION_COOKIE_HTTPONLY = True

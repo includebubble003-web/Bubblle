@@ -4,22 +4,29 @@
 {% block content %}
 <section class="panel chat-header">
   <a href="/" class="back-link">← Back</a>
-  <h1 class="h1" id="bubble-title">Loading…</h1>
+  <h1 class="h1" id="bubble-title">Chat</h1>
+  <div class="status-chips" aria-live="polite">
+    <span class="pill pill-muted" id="ws-status">Connecting…</span>
+    <span class="pill pill-muted" id="history-status">Loading messages…</span>
+  </div>
   <div class="meta-row">
     <span class="pill" id="bubble-expiry"></span>
-    <span class="pill pill-accent" id="online-count">0 online</span>
+    <span class="pill pill-accent" id="online-count">— active</span>
   </div>
   <p class="muted" id="bubble-sub"></p>
 </section>
 
 <section class="panel chat-wrap">
   <div id="chat-status" class="banner banner-warn" hidden></div>
-  <div id="messages" class="messages" aria-live="polite"></div>
+  <div id="messages" class="messages" aria-live="polite">
+    <p class="messages-placeholder" id="messages-placeholder">Loading messages…</p>
+  </div>
   <div id="typing" class="typing muted" hidden></div>
   <form id="chat-form" class="composer">
-    <input id="chat-input" autocomplete="off" maxlength="2000" placeholder="Message…" disabled />
-    <button class="btn btn-primary" type="submit" disabled>Send</button>
+    <input id="chat-input" autocomplete="off" maxlength="2000" placeholder="Type a message…" />
+    <button class="btn btn-primary" type="submit" id="btn-send">Send</button>
   </form>
+  <p class="composer-hint muted" id="composer-hint" hidden></p>
 </section>
 {% endblock %}
 {% block scripts %}
