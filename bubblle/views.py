@@ -1,12 +1,13 @@
 from django.views.generic import TemplateView
 
 
-class BubblePageView(TemplateView):
-    """Serve SPA-style bubble chat shell with UUID in template context."""
+class ChatShellView(TemplateView):
+    """Unified chat UI: sidebar bubbles + main chat area."""
 
-    template_name = "bubble.html"
+    template_name = "chat_shell.html"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["bubble_id"] = self.kwargs["bubble_id"]
+        bid = self.kwargs.get("bubble_id")
+        ctx["bubble_id"] = str(bid) if bid else ""
         return ctx

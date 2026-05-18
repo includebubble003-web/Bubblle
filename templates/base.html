@@ -6,15 +6,10 @@
     <title>{% block title %}Bubblle{% endblock %}</title>
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/app.css' %}" />
+    {% block extra_css %}{% endblock %}
   </head>
-  <body>
-    <div class="app-shell">
-      <header class="topbar">
-        <a class="brand" href="/">Bubblle</a>
-        <span class="badge" id="whoami" hidden></span>
-      </header>
-      <main class="main">{% block content %}{% endblock %}</main>
-    </div>
+  <body class="{% block body_class %}{% endblock %}">
+    {% block body %}{% endblock %}
     {% block scripts %}{% endblock %}
   </body>
 </html>
