@@ -1,12 +1,12 @@
 import {
   bootstrapSession,
-  cachedDisplayName,
   showWhoami,
   updateDisplayName,
 } from "./session.js";
 import {
+  acquireLocation,
   formatGeolocationError,
-  getCurrentPosition,
+  geolocationPermissionState,
   isGeolocationContextOk,
   secureContextHint,
 } from "./geo.js";
@@ -18,6 +18,7 @@ const NEARBY_POLL_MS = 5000;
 
 let pos = null;
 let nearbyPollTimer = null;
+let stopLocation = null;
 
 function fmtRemaining(sec) {
   if (sec <= 0) return "Expired";
@@ -68,9 +69,7 @@ function renderList(rows) {
 function startNearbyPolling() {
   stopNearbyPolling();
   nearbyPollTimer = setInterval(() => {
-    if (pos && document.visibilityState !== "hidden") {
-      refreshNearby();
-    }
+    if (pos && document.visibilityState !== "hidden") refreshNearby();
   }, NEARBY_POLL_MS);
 }
 
@@ -122,33 +121,53 @@ function setNameStatus(text, ok = true) {
   el.className = ok ? "muted fine-print" : "muted fine-print name-error";
 }
 
-async function requestLocation() {
-  const insecure = secureContextHint();
-  if (insecure) {
-    setLocBanner(insecure, "bad");
-    return false;
+function applyPosition(p, { quiet = false } = {}) {
+  pos = p;
+  $("#f-lat").value = String(p.lat);
+  $("#f-lng").value = String(p.lng);
+  $("#btn-create").disabled = false;
+  if (!quiet) setLocBanner("", false);
+  refreshNearby();
+  startNearbyPolling();
+}
+
+function startLocation() {
+  if (!isGeolocationContextOk()) {
+    setLocBanner(secureContextHint(), "bad");
+    return;
   }
-  setLocBanner("Allow location when your browser asks…", "info");
-  try {
-    pos = await getCurrentPosition();
-    try {
-      sessionStorage.setItem("bbl_last_pos", JSON.stringify(pos));
-    } catch {
-      /* ignore */
+
+  geolocationPermissionState().then((perm) => {
+    if (perm === "granted") {
+      setLocBanner("Detecting your location…", "info");
+    } else {
+      setLocBanner("Allow location when your browser asks — required for nearby bubbles.", "info");
     }
-    $("#f-lat").value = String(pos.lat);
-    $("#f-lng").value = String(pos.lng);
-    $("#btn-create").disabled = false;
-    setLocBanner("", false);
-    await refreshNearby();
-    startNearbyPolling();
-    return true;
-  } catch (err) {
-    setLocBanner(formatGeolocationError(err), "bad");
-    $("#empty-state").hidden = false;
-    $("#empty-state").textContent = "Location is required to use Bubblle.";
-    return false;
-  }
+  });
+
+  if (stopLocation) stopLocation();
+  stopLocation = acquireLocation({
+    onUpdate: (p, meta) => {
+      const quiet = meta.source === "refined";
+      applyPosition(p, { quiet });
+      if (meta.source === "cached" || meta.source === "fast") {
+        setLocBanner("", false);
+      }
+    },
+    onError: (err) => {
+      if (!pos) {
+        setLocBanner(formatGeolocationError(err), "bad");
+        $("#empty-state").textContent = "Location is required to use Bubblle.";
+      }
+    },
+    onStatus: (s) => {
+      if (s === "prompt") {
+        setLocBanner("Tap Allow to share your location.", "info");
+      } else if (s === "detecting" && !pos) {
+        setLocBanner("Detecting your location…", "info");
+      }
+    },
+  });
 }
 
 async function saveDisplayName(name) {
@@ -168,49 +187,38 @@ async function saveDisplayName(name) {
   }
 }
 
-async function main() {
-  try {
-    const session = await bootstrapSession();
-    const nameInput = $("#display-name");
-    if (nameInput && session.anonymous_name) {
-      nameInput.value = session.anonymous_name;
-    }
-    showWhoami();
-  } catch {
-    setLocBanner("Could not start session. Check network and try again.", "bad");
-    return;
-  }
+function main() {
+  bootstrapSession()
+    .then((session) => {
+      const nameInput = $("#display-name");
+      if (nameInput && session.anonymous_name) nameInput.value = session.anonymous_name;
+      showWhoami();
+    })
+    .catch(() => setLocBanner("Could not start session. Refresh the page.", "bad"));
+
+  startLocation();
 
   $("#name-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     await saveDisplayName($("#display-name").value);
   });
 
-  if (!isGeolocationContextOk()) {
-    setLocBanner(secureContextHint(), "bad");
-  } else {
-    await requestLocation();
-  }
-
   $("#btn-refresh").addEventListener("click", () => refreshNearby());
-
-  window.addEventListener("pagehide", stopNearbyPolling);
+  window.addEventListener("pagehide", () => {
+    stopNearbyPolling();
+    if (stopLocation) stopLocation();
+  });
 
   $("#create-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     if (!pos) {
-      await requestLocation();
-      if (!pos) return;
+      startLocation();
+      return;
     }
     const nameOk = await saveDisplayName($("#display-name").value);
     if (!nameOk) return;
 
     const fd = new FormData(ev.target);
-    const body = {
-      title: fd.get("title"),
-      latitude: pos.lat,
-      longitude: pos.lng,
-    };
     const btn = $("#btn-create");
     btn.disabled = true;
     try {
@@ -218,7 +226,7 @@ async function main() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ title: fd.get("title"), latitude: pos.lat, longitude: pos.lng }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

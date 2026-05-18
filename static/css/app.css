@@ -252,6 +252,7 @@ a:hover {
 .meta-row {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   margin-top: 8px;
 }
@@ -268,23 +269,36 @@ a:hover {
   background: rgba(94, 234, 212, 0.08);
 }
 
-.status-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
+/* Connection indicator — fixed 10px dot, no text = no vertical jump */
+.conn-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--muted);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25);
 }
 
-.pill-muted {
-  color: var(--muted);
-  background: rgba(0, 0, 0, 0.2);
-  animation: chip-pulse 1.4s ease-in-out infinite;
+.conn-dot[data-state="loading"] {
+  background: var(--warn);
+  animation: conn-pulse 1.2s ease-in-out infinite;
 }
 
-@keyframes chip-pulse {
+.conn-dot[data-state="ok"] {
+  background: var(--ok);
+  animation: none;
+}
+
+.conn-dot[data-state="error"] {
+  background: var(--bad);
+  animation: none;
+}
+
+@keyframes conn-pulse {
   0%,
   100% {
-    opacity: 0.65;
+    opacity: 0.5;
   }
   50% {
     opacity: 1;
