@@ -132,7 +132,7 @@ class BubbleConsumer(AsyncJsonWebsocketConsumer):
 
         session_uuid = self.scope.get("bubblle_session_uuid") or "anon"
         throttle_key = f"bbl:msgthrottle:{self.bubble_id}:{session_uuid}"
-        if not await sync_to_async(throttle_allow)(throttle_key, 2):
+        if not await sync_to_async(throttle_allow)(throttle_key, 1):
             await self.send_json({"type": "error", "code": "slow_down"})
             return
 

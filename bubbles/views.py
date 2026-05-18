@@ -186,7 +186,7 @@ def bubble_messages(request, bubble_id: UUID):
         return Response({"detail": "Outside bubble radius."}, status=status.HTTP_403_FORBIDDEN)
 
     throttle_key = f"bbl:msgthrottle:{bubble.id}:{session.session_uuid}"
-    if not throttle_allow(throttle_key, 2):
+    if not throttle_allow(throttle_key, 1):
         return Response({"detail": "Slow down."}, status=status.HTTP_429_TOO_MANY_REQUESTS)
 
     msg = Message.objects.create(

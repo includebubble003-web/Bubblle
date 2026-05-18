@@ -53,16 +53,23 @@
     </header>
 
     <div class="chat-panel chat-panel--idle" id="chat-panel">
+      <div class="chat-idle-prompt" id="chat-idle-prompt">
+        <p class="chat-idle-title">Join a bubble to chat</p>
+        <p class="muted">Pick a nearby bubble from the list, or create one to talk with strangers around you.</p>
+      </div>
+
       <div class="chat-thread" id="chat-thread" hidden>
         <div id="chat-status" class="banner banner-warn thread-banner" hidden></div>
-        <div class="messages" id="messages" aria-live="polite">
-          <p class="messages-placeholder" id="messages-placeholder">Loading messages…</p>
+        <div class="messages-scroll" id="messages-scroll">
+          <div class="messages-list" id="messages" aria-live="polite">
+            <p class="messages-placeholder" id="messages-placeholder">Loading messages…</p>
+          </div>
         </div>
-        <div class="typing" id="typing" hidden></div>
       </div>
     </div>
 
-    <footer class="chat-composer" id="chat-composer">
+    <footer class="chat-composer" id="chat-composer" hidden>
+      <p class="composer-typing" id="typing" hidden></p>
       <form id="chat-form" class="composer-form">
         <input id="chat-input" autocomplete="off" maxlength="2000" placeholder="Message…" disabled />
         <button class="btn btn-primary" type="submit" id="btn-send" disabled>Send</button>

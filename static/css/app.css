@@ -312,7 +312,7 @@ a:hover {
   padding-bottom: 10px;
 }
 
-.messages {
+.chat-wrap .messages {
   flex: 1;
   overflow-y: auto;
   max-height: min(58dvh, 520px);
@@ -322,7 +322,7 @@ a:hover {
   contain: layout style;
 }
 
-.messages-placeholder {
+.chat-wrap .messages-placeholder {
   text-align: center;
   padding: 24px 12px;
   font-size: 0.9rem;
@@ -372,7 +372,7 @@ a:hover {
   word-break: break-word;
 }
 
-.typing {
+.chat-wrap .typing {
   min-height: 1.2em;
   font-size: 0.85rem;
   margin-bottom: 6px;

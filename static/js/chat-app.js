@@ -15,7 +15,7 @@ const SEARCH_RADIUS_M = 5000;
 const NEARBY_POLL_MS = 5000;
 const WS_RECONNECT_BASE_MS = 3000;
 const WS_RECONNECT_MAX_MS = 20000;
-const MSG_COOLDOWN_MS = 2000;
+const MSG_COOLDOWN_MS = 1000;
 
 const bubbleId = (window.__BUBBLE_ID__ || "").trim() || null;
 
@@ -227,7 +227,9 @@ function showWelcome() {
   const panel = $("#chat-panel");
   const thread = $("#chat-thread");
   panel?.classList.add("chat-panel--idle");
+  $("#chat-idle-prompt")?.removeAttribute("hidden");
   thread?.setAttribute("hidden", "hidden");
+  $("#chat-composer")?.setAttribute("hidden", "hidden");
   const messages = $("#messages");
   if (messages) messages.innerHTML = "";
   $("#chat-input")?.setAttribute("disabled", "disabled");
@@ -242,7 +244,9 @@ function showThread() {
   const panel = $("#chat-panel");
   const thread = $("#chat-thread");
   panel?.classList.remove("chat-panel--idle");
+  $("#chat-idle-prompt")?.setAttribute("hidden", "hidden");
   thread?.removeAttribute("hidden");
+  $("#chat-composer")?.removeAttribute("hidden");
   $("#chat-input")?.removeAttribute("disabled");
   if (!isSendOnCooldown()) $("#btn-send")?.removeAttribute("disabled");
 }
@@ -310,9 +314,17 @@ function clearMessagesPlaceholder() {
   $("#messages-placeholder")?.remove();
 }
 
+function scrollMessages() {
+  const scroller = $("#messages-scroll");
+  if (!scroller) return;
+  requestAnimationFrame(() => {
+    scroller.scrollTop = scroller.scrollHeight;
+  });
+}
+
 function appendMessage(m, opts = { scroll: true }) {
   clearMessagesPlaceholder();
-  const wrap = $("#messages");
+  const list = $("#messages");
   const mine = myName && m.anonymous_name === myName;
   const row = document.createElement("div");
   row.className = `msg-bubble${mine ? " msg-bubble-mine" : ""}`;
@@ -323,13 +335,9 @@ function appendMessage(m, opts = { scroll: true }) {
       <p class="msg-text">${escapeHtml(m.message)}</p>
       <span class="msg-time">${t}</span>
     </div>`;
-  wrap.appendChild(row);
+  list.appendChild(row);
   row.style.animation = "msg-in 0.28s ease-out";
-  if (opts.scroll) {
-    requestAnimationFrame(() => {
-      wrap.scrollTop = wrap.scrollHeight;
-    });
-  }
+  if (opts.scroll) scrollMessages();
 }
 
 /* --- WebSocket --- */
@@ -393,7 +401,6 @@ function flushOutboundQueue() {
         longitude: pos.lng,
       })
     );
-    startSendCooldown();
   }
 }
 
@@ -488,7 +495,6 @@ function sendChat(text) {
     activeSocket.send(
       JSON.stringify({ type: "typing", typing: false, latitude: pos.lat, longitude: pos.lng })
     );
-    startSendCooldown();
     return;
   }
   outboundQueue.push({ kind: "chat", text });
@@ -542,9 +548,7 @@ function loadHistory() {
         return;
       }
       for (const m of data.results) appendMessage(m, { scroll: false });
-      requestAnimationFrame(() => {
-        wrap.scrollTop = wrap.scrollHeight;
-      });
+      scrollMessages();
     })
     .catch(() => clearMessagesPlaceholder());
 }
