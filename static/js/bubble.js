@@ -1,30 +1,28 @@
 import { bootstrapSession, showWhoami } from "./session.js";
 import {
+  acquireLocation,
   formatGeolocationError,
-  getCurrentPosition,
   isGeolocationContextOk,
+  readCachedPosition,
   secureContextHint,
 } from "./geo.js";
 
 const bubbleId = window.__BUBBLE_ID__;
 const $ = (sel) => document.querySelector(sel);
 
-const WS_RECONNECT_BASE_MS = 1000;
-const WS_RECONNECT_MAX_MS = 15000;
-const POS_CACHE_KEY = "bbl_last_pos";
+const WS_RECONNECT_BASE_MS = 3000;
+const WS_RECONNECT_MAX_MS = 20000;
 
 let pos = null;
-let ws = null;
+let activeSocket = null;
 let typingTimer = null;
 let lastTypingSent = 0;
 let reconnectTimer = null;
 let reconnectAttempt = 0;
-let intentionalClose = false;
+let allowReconnect = true;
 let bubbleActive = true;
-let historyLoaded = false;
 const outboundQueue = [];
-
-// --- UI helpers (sync, never await) ---
+let stopLocation = null;
 
 function escapeHtml(s) {
   return String(s)
@@ -34,29 +32,23 @@ function escapeHtml(s) {
     .replaceAll('"', "&quot;");
 }
 
-function setChip(id, text, visible = true) {
-  const el = $(id);
+/** Fixed-size dot — no layout shift (replaces connecting/reconnecting text). */
+function setConnDot(state, title = "") {
+  const el = $("#conn-dot");
   if (!el) return;
-  if (!visible || !text) {
-    el.hidden = true;
-    return;
-  }
-  el.hidden = false;
-  el.textContent = text;
-}
-
-function setWsChip(text) {
-  setChip("#ws-status", text, Boolean(text));
-}
-
-function setHistoryChip(text) {
-  setChip("#history-status", text, Boolean(text));
+  el.dataset.state = state;
+  const labels = {
+    loading: "Connecting",
+    ok: "Connected",
+    error: "Disconnected",
+    idle: "Offline",
+  };
+  el.title = title || labels[state] || "";
 }
 
 function setActiveUsers(n) {
   const el = $("#online-count");
-  if (!el) return;
-  el.textContent = `${Number(n) || 0} active`;
+  if (el) el.textContent = `${Number(n) || 0} active`;
 }
 
 function setStatus(msg, show) {
@@ -74,8 +66,7 @@ function setComposerHint(msg) {
 }
 
 function clearMessagesPlaceholder() {
-  const ph = $("#messages-placeholder");
-  if (ph) ph.remove();
+  $("#messages-placeholder")?.remove();
 }
 
 function appendMessage(m, opts = { scroll: true }) {
@@ -95,33 +86,54 @@ function appendMessage(m, opts = { scroll: true }) {
   }
 }
 
-function readCachedPosition() {
-  try {
-    const raw = sessionStorage.getItem(POS_CACHE_KEY);
-    if (!raw) return null;
-    const p = JSON.parse(raw);
-    if (typeof p?.lat === "number" && typeof p?.lng === "number") return p;
-  } catch {
-    /* ignore */
-  }
-  return null;
-}
-
-function cachePosition(p) {
-  try {
-    sessionStorage.setItem(POS_CACHE_KEY, JSON.stringify(p));
-  } catch {
-    /* ignore */
-  }
-}
-
 function wsUrl() {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   return `${proto}//${location.host}/ws/bubble/${bubbleId}/?lat=${encodeURIComponent(pos.lat)}&lng=${encodeURIComponent(pos.lng)}`;
 }
 
 function isWsOpen() {
-  return ws && ws.readyState === WebSocket.OPEN;
+  return activeSocket?.readyState === WebSocket.OPEN;
+}
+
+function isWsBusy() {
+  return (
+    activeSocket &&
+    (activeSocket.readyState === WebSocket.CONNECTING ||
+      activeSocket.readyState === WebSocket.OPEN)
+  );
+}
+
+function isPermanentWsClose(code) {
+  return code === 4400 || code === 4401 || code === 4403 || code === 4404;
+}
+
+function permanentCloseMessage(code) {
+  if (code === 4401) return "Refresh the page and allow cookies.";
+  if (code === 4403) return "You are outside this bubble. Move closer and refresh.";
+  if (code === 4404) return "This bubble has ended.";
+  return "Cannot join this chat.";
+}
+
+function stopReconnecting(msg) {
+  allowReconnect = false;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  setConnDot("error", msg);
+  setStatus(msg, true);
+}
+
+function detachSocket(socket) {
+  socket.onopen = null;
+  socket.onclose = null;
+  socket.onerror = null;
+  socket.onmessage = null;
+  try {
+    socket.close();
+  } catch {
+    /* ignore */
+  }
 }
 
 function flushOutboundQueue() {
@@ -129,7 +141,7 @@ function flushOutboundQueue() {
   while (outboundQueue.length) {
     const item = outboundQueue.shift();
     if (item.kind === "chat") {
-      ws.send(
+      activeSocket.send(
         JSON.stringify({
           type: "chat",
           message: item.text,
@@ -143,11 +155,10 @@ function flushOutboundQueue() {
 }
 
 function scheduleReconnect() {
-  if (intentionalClose || !pos || !bubbleActive) return;
-  if (reconnectTimer) clearTimeout(reconnectTimer);
+  if (!allowReconnect || !pos || !bubbleActive || reconnectTimer) return;
   const delay = Math.min(WS_RECONNECT_BASE_MS * 2 ** reconnectAttempt, WS_RECONNECT_MAX_MS);
   reconnectAttempt += 1;
-  setWsChip(`Reconnecting in ${Math.ceil(delay / 1000)}s…`);
+  setConnDot("loading", `Reconnecting (${Math.ceil(delay / 1000)}s)`);
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     connectWs();
@@ -155,47 +166,42 @@ function scheduleReconnect() {
 }
 
 function connectWs() {
-  if (!pos || !bubbleActive) return;
+  if (!pos || !bubbleActive || !allowReconnect || isWsBusy()) return;
 
-  if (ws) {
-    intentionalClose = true;
-    try {
-      ws.close();
-    } catch {
-      /* ignore */
-    }
-    ws = null;
-    intentionalClose = false;
-  }
+  setConnDot("loading", "Connecting");
 
-  setWsChip("Connecting…");
+  const socket = new WebSocket(wsUrl());
+  activeSocket = socket;
 
-  try {
-    ws = new WebSocket(wsUrl());
-  } catch {
-    setWsChip("Connection failed");
-    scheduleReconnect();
-    return;
-  }
-
-  ws.addEventListener("open", () => {
+  socket.onopen = () => {
+    if (activeSocket !== socket) return;
     reconnectAttempt = 0;
-    setWsChip("");
+    setConnDot("ok", "Connected");
     flushOutboundQueue();
-  });
+  };
 
-  ws.addEventListener("close", () => {
-    setWsChip("Disconnected");
-    if (!intentionalClose && bubbleActive) {
-      scheduleReconnect();
+  socket.onclose = (ev) => {
+    if (activeSocket !== socket) return;
+    activeSocket = null;
+
+    if (isPermanentWsClose(ev.code)) {
+      stopReconnecting(permanentCloseMessage(ev.code));
+      return;
     }
-  });
+    if (!allowReconnect || !bubbleActive) {
+      setConnDot("error", "Disconnected");
+      return;
+    }
+    setConnDot("loading", "Reconnecting");
+    scheduleReconnect();
+  };
 
-  ws.addEventListener("error", () => {
-    setWsChip("Connection error");
-  });
+  socket.onerror = () => {
+    /* onclose handles state */
+  };
 
-  ws.addEventListener("message", (ev) => {
+  socket.onmessage = (ev) => {
+    if (activeSocket !== socket) return;
     let data;
     try {
       data = JSON.parse(ev.data);
@@ -221,60 +227,74 @@ function connectWs() {
       else if (data.code === "out_of_radius") setStatus("You moved outside the bubble radius.", true);
       else if (data.code === "bubble_closed") {
         bubbleActive = false;
+        allowReconnect = false;
+        detachSocket(socket);
+        activeSocket = null;
         setStatus("This bubble has expired.", true);
+        setConnDot("error", "Ended");
       }
     }
-  });
+  };
 }
 
 function sendChat(text) {
   if (!text || !pos) return;
   if (isWsOpen()) {
-    ws.send(
-      JSON.stringify({
-        type: "chat",
-        message: text,
-        latitude: pos.lat,
-        longitude: pos.lng,
-      })
+    activeSocket.send(
+      JSON.stringify({ type: "chat", message: text, latitude: pos.lat, longitude: pos.lng })
     );
-    ws.send(
+    activeSocket.send(
       JSON.stringify({ type: "typing", typing: false, latitude: pos.lat, longitude: pos.lng })
     );
     return;
   }
   outboundQueue.push({ kind: "chat", text });
   setComposerHint("Will send when connected…");
-  if (pos && bubbleActive) connectWs();
+  if (allowReconnect && bubbleActive) connectWs();
 }
 
 function sendTyping(typing) {
   if (!isWsOpen() || !pos) return;
-  ws.send(
-    JSON.stringify({
-      type: "typing",
-      typing,
-      latitude: pos.lat,
-      longitude: pos.lng,
-    })
+  activeSocket.send(
+    JSON.stringify({ type: "typing", typing, latitude: pos.lat, longitude: pos.lng })
   );
 }
 
-// --- Background tasks (never block UI init) ---
+function positionChanged(a, b) {
+  return Math.abs(a.lat - b.lat) > 0.0002 || Math.abs(a.lng - b.lng) > 0.0002;
+}
+
+function applyPosition(p, { reconnectWs = false } = {}) {
+  const prev = pos;
+  pos = p;
+  loadBubbleMeta();
+  if (!prev) {
+    connectWs();
+    return;
+  }
+  if (reconnectWs && positionChanged(prev, p) && isWsBusy()) {
+    if (activeSocket) detachSocket(activeSocket);
+    activeSocket = null;
+    reconnectAttempt = 0;
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    connectWs();
+  }
+}
 
 function loadBubbleMeta() {
   if (!pos) return;
   const q = new URLSearchParams({ lat: String(pos.lat), lng: String(pos.lng) });
   fetch(`/api/bubbles/${bubbleId}/?${q}`, { credentials: "include" })
-    .then((res) => {
-      if (!res.ok) {
-        $("#bubble-title").textContent = "Not found";
-        return null;
-      }
-      return res.json();
-    })
+    .then((res) => (res.ok ? res.json() : null))
     .then((b) => {
-      if (!b) return;
+      if (!b) {
+        $("#bubble-title").textContent = "Not found";
+        stopReconnecting("Bubble not found.");
+        return;
+      }
       $("#bubble-title").textContent = b.title;
       if (b.distance_m != null) {
         $("#bubble-sub").textContent = `Radius ${b.radius} m · ~${Math.round(b.distance_m)} m from center`;
@@ -288,23 +308,22 @@ function loadBubbleMeta() {
       if (typeof users === "number") setActiveUsers(users);
       if (!b.active) {
         bubbleActive = false;
+        allowReconnect = false;
+        if (activeSocket) detachSocket(activeSocket);
+        activeSocket = null;
         setStatus("This bubble has expired.", true);
-        intentionalClose = true;
-        if (ws) ws.close();
+        setConnDot("error", "Ended");
+      } else if (b.distance_m != null && b.distance_m > b.radius) {
+        stopReconnecting("Outside bubble — move closer and refresh.");
       }
     })
-    .catch(() => {
-      /* meta is non-critical for chat */
-    });
+    .catch(() => {});
 }
 
 function loadHistory() {
-  setHistoryChip("Loading messages…");
   fetch(`/api/bubbles/${bubbleId}/messages/?limit=80`, { credentials: "include" })
     .then((res) => (res.ok ? res.json() : null))
     .then((data) => {
-      historyLoaded = true;
-      setHistoryChip("");
       if (!data?.results?.length) {
         clearMessagesPlaceholder();
         if (!$("#messages").children.length) {
@@ -323,48 +342,46 @@ function loadHistory() {
         wrap.scrollTop = wrap.scrollHeight;
       });
     })
-    .catch(() => {
-      setHistoryChip("");
-      clearMessagesPlaceholder();
-    });
+    .catch(() => clearMessagesPlaceholder());
 }
 
-function onPositionReady(p) {
-  pos = p;
-  cachePosition(p);
-  loadBubbleMeta();
-  connectWs();
-}
-
-function resolveLocation() {
-  const cached = readCachedPosition();
-  if (cached) onPositionReady(cached);
-
+function startLocation() {
   if (!isGeolocationContextOk()) {
-    if (!cached) setStatus(secureContextHint(), true);
+    setStatus(secureContextHint(), true);
+    setConnDot("error", "No location");
     return;
   }
 
-  getCurrentPosition()
-    .then((p) => onPositionReady(p))
-    .catch((err) => {
-      if (!pos) setStatus(formatGeolocationError(err), true);
-    });
+  const cached = readCachedPosition();
+  if (cached) applyPosition(cached);
+
+  if (stopLocation) stopLocation();
+  stopLocation = acquireLocation({
+    onUpdate: (p, meta) => {
+      applyPosition(p, { reconnectWs: meta.source === "refined" });
+    },
+    onError: (err) => {
+      if (!pos) {
+        setStatus(formatGeolocationError(err), true);
+        setConnDot("error", "No location");
+      }
+    },
+  });
 }
 
 function setupComposer() {
   $("#chat-form").addEventListener("submit", (ev) => {
     ev.preventDefault();
-    const input = $("#chat-input");
-    const text = input.value.trim();
+    const text = $("#chat-input").value.trim();
     if (!text) return;
     if (!pos) {
       setComposerHint("Waiting for location…");
+      startLocation();
       return;
     }
     if (!bubbleActive) return;
     sendChat(text);
-    input.value = "";
+    $("#chat-input").value = "";
   });
 
   $("#chat-input").addEventListener("input", () => {
@@ -379,27 +396,24 @@ function setupComposer() {
   });
 }
 
-function initChatShell() {
-  setupComposer();
-  setWsChip("Connecting…");
-  setHistoryChip("Loading messages…");
-  loadHistory();
-}
-
 function main() {
-  initChatShell();
+  setupComposer();
+  setConnDot("loading", "Waiting for location");
+  loadHistory();
 
   bootstrapSession()
     .then(() => showWhoami())
     .catch(() => setStatus("Session error. Refresh the page.", true));
 
-  resolveLocation();
+  startLocation();
 }
 
 window.addEventListener("pagehide", () => {
-  intentionalClose = true;
+  allowReconnect = false;
   if (reconnectTimer) clearTimeout(reconnectTimer);
-  if (ws) ws.close();
+  if (stopLocation) stopLocation();
+  if (activeSocket) detachSocket(activeSocket);
+  activeSocket = null;
 });
 
 main();

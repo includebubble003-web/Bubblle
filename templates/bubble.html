@@ -5,11 +5,8 @@
 <section class="panel chat-header">
   <a href="/" class="back-link">← Back</a>
   <h1 class="h1" id="bubble-title">Chat</h1>
-  <div class="status-chips" aria-live="polite">
-    <span class="pill pill-muted" id="ws-status">Connecting…</span>
-    <span class="pill pill-muted" id="history-status">Loading messages…</span>
-  </div>
   <div class="meta-row">
+    <span class="conn-dot" id="conn-dot" data-state="loading" title="Connecting" aria-label="Connection status"></span>
     <span class="pill" id="bubble-expiry"></span>
     <span class="pill pill-accent" id="online-count">— active</span>
   </div>
