@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Bubblle{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/chat.css' %}" />{% endblock %}
+{% block body_class %}chat-body{% endblock %}
+{% block body %}
+<div class="chat-app" id="chat-app">
+  <div class="drawer-backdrop" id="drawer-backdrop" hidden aria-hidden="true"></div>
+
+  <aside class="sidebar" id="sidebar" aria-label="Nearby bubbles">
+    <div class="sidebar-brand">
+      <a href="/" class="brand">Bubblle</a>
+      <span class="loc-pill" id="loc-pill" data-state="idle" title="Location">◎</span>
+    </div>
+
+    <form id="create-form" class="sidebar-create">
+      <input name="title" maxlength="120" required placeholder="New bubble title…" />
+      <button type="submit" class="btn btn-accent btn-block" id="btn-create" disabled>+ Create</button>
+    </form>
+
+    <div class="sidebar-section-head">
+      <span>Within 5 km</span>
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-refresh-bubbles" title="Refresh">↻</button>
+    </div>
+
+    <ul class="sidebar-bubbles" id="sidebar-bubbles"></ul>
+    <p class="sidebar-empty muted" id="sidebar-empty">Getting location…</p>
+  </aside>
+
+  <div class="chat-main">
+    <header class="chat-topbar">
+      <button type="button" class="btn-icon mobile-only" id="btn-drawer" aria-label="Open bubbles">☰</button>
+
+      <div class="identity" id="identity">
+        <span class="identity-dot" aria-hidden="true"></span>
+        <input
+          id="display-name"
+          class="identity-input"
+          maxlength="64"
+          autocomplete="nickname"
+          placeholder="Your name"
+          aria-label="Display name"
+        />
+        <button type="button" class="btn btn-ghost btn-sm identity-save" id="btn-save-name" title="Save name">✓</button>
+      </div>
+
+      <div class="room-meta" id="room-meta">
+        <h1 class="room-title" id="bubble-title">Pick a bubble</h1>
+        <span class="conn-dot" id="conn-dot" data-state="idle" title="Chat connection"></span>
+        <span class="pill pill-sm" id="bubble-expiry"></span>
+        <span class="pill pill-sm pill-accent" id="online-count"></span>
+      </div>
+    </header>
+
+    <div class="chat-panel" id="chat-panel">
+      <div class="welcome-state" id="welcome-state">
+        <p class="welcome-title">Anonymous chat nearby</p>
+        <p class="muted">Choose a bubble from the list, or create one. No account needed.</p>
+      </div>
+
+      <div class="chat-thread" id="chat-thread" hidden>
+        <div id="chat-status" class="banner banner-warn thread-banner" hidden></div>
+        <div class="messages" id="messages" aria-live="polite">
+          <p class="messages-placeholder" id="messages-placeholder">Loading messages…</p>
+        </div>
+        <div class="typing" id="typing" hidden></div>
+      </div>
+    </div>
+
+    <footer class="chat-composer" id="chat-composer">
+      <form id="chat-form" class="composer-form">
+        <input id="chat-input" autocomplete="off" maxlength="2000" placeholder="Message…" disabled />
+        <button class="btn btn-primary" type="submit" id="btn-send" disabled>Send</button>
+      </form>
+      <p class="composer-hint muted" id="composer-hint" hidden></p>
+    </footer>
+  </div>
+</div>
+
+<input type="hidden" id="f-lat" />
+<input type="hidden" id="f-lng" />
+{% endblock %}
+{% block scripts %}
+<script>
+  window.__BUBBLE_ID__ = "{{ bubble_id|default:'' }}";
+</script>
+<script src="{% static 'js/chat-app.js' %}" type="module"></script>
+{% endblock %}

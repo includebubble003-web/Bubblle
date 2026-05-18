@@ -10,8 +10,21 @@ import {
 const bubbleId = window.__BUBBLE_ID__;
 const $ = (sel) => document.querySelector(sel);
 
+<<<<<<< Updated upstream
 const WS_RECONNECT_BASE_MS = 3000;
 const WS_RECONNECT_MAX_MS = 20000;
+=======
+<<<<<<< Updated upstream
+const WS_RECONNECT_BASE_MS = 1000;
+const WS_RECONNECT_MAX_MS = 15000;
+const POS_CACHE_KEY = "bbl_last_pos";
+=======
+const WS_RECONNECT_BASE_MS = 3000;
+const WS_RECONNECT_MAX_MS = 20000;
+/** Matches server `throttle_allow(..., 2)` in bubbles/consumers.py */
+const MSG_COOLDOWN_MS = 2000;
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
 
 let pos = null;
 let activeSocket = null;
@@ -22,7 +35,18 @@ let reconnectAttempt = 0;
 let allowReconnect = true;
 let bubbleActive = true;
 const outboundQueue = [];
+<<<<<<< Updated upstream
 let stopLocation = null;
+=======
+<<<<<<< Updated upstream
+
+// --- UI helpers (sync, never await) ---
+=======
+let stopLocation = null;
+let sendCooldownUntil = 0;
+let sendCooldownTick = null;
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
 
 function escapeHtml(s) {
   return String(s)
@@ -58,11 +82,52 @@ function setStatus(msg, show) {
   s.textContent = msg || "";
 }
 
-function setComposerHint(msg) {
+function isSendOnCooldown() {
+  return Date.now() < sendCooldownUntil;
+}
+
+function setSendEnabled(enabled) {
+  const btn = $("#btn-send");
+  if (btn) btn.disabled = !enabled;
+}
+
+function setComposerHint(msg, { kind = "muted" } = {}) {
   const el = $("#composer-hint");
   if (!el) return;
-  el.hidden = !msg;
-  el.textContent = msg || "";
+  if (!msg) {
+    if (isSendOnCooldown() && el.dataset.kind === "cooldown") return;
+    el.hidden = true;
+    el.textContent = "";
+    el.dataset.kind = "";
+    el.className = "composer-hint muted";
+    return;
+  }
+  el.hidden = false;
+  el.textContent = msg;
+  el.dataset.kind = kind === "cooldown" ? "cooldown" : "info";
+  el.className = kind === "warn" || kind === "cooldown" ? "composer-hint composer-hint-warn" : "composer-hint muted";
+}
+
+function refreshCooldownUi() {
+  if (!isSendOnCooldown()) {
+    if (sendCooldownTick) {
+      clearInterval(sendCooldownTick);
+      sendCooldownTick = null;
+    }
+    setSendEnabled(true);
+    setComposerHint("");
+    return;
+  }
+  const sec = Math.max(1, Math.ceil((sendCooldownUntil - Date.now()) / 1000));
+  setComposerHint(`Wait ${sec}s before sending again`, { kind: "cooldown" });
+}
+
+function startSendCooldown() {
+  sendCooldownUntil = Date.now() + MSG_COOLDOWN_MS;
+  setSendEnabled(false);
+  refreshCooldownUi();
+  if (sendCooldownTick) clearInterval(sendCooldownTick);
+  sendCooldownTick = setInterval(refreshCooldownUi, 250);
 }
 
 function clearMessagesPlaceholder() {
@@ -137,6 +202,7 @@ function detachSocket(socket) {
 }
 
 function flushOutboundQueue() {
+<<<<<<< Updated upstream
   if (!isWsOpen() || !pos) return;
   while (outboundQueue.length) {
     const item = outboundQueue.shift();
@@ -150,8 +216,22 @@ function flushOutboundQueue() {
         })
       );
     }
+=======
+  if (!isWsOpen() || !pos || outboundQueue.length === 0) return;
+  if (isSendOnCooldown()) return;
+  const item = outboundQueue.shift();
+  if (item?.kind === "chat") {
+    activeSocket.send(
+      JSON.stringify({
+        type: "chat",
+        message: item.text,
+        latitude: pos.lat,
+        longitude: pos.lng,
+      })
+    );
+    startSendCooldown();
+>>>>>>> Stashed changes
   }
-  setComposerHint("");
 }
 
 function scheduleReconnect() {
@@ -223,7 +303,7 @@ function connectWs() {
         t.hidden = true;
       }
     } else if (data.type === "error") {
-      if (data.code === "slow_down") setStatus("Sending too fast.", true);
+      if (data.code === "slow_down") startSendCooldown();
       else if (data.code === "out_of_radius") setStatus("You moved outside the bubble radius.", true);
       else if (data.code === "bubble_closed") {
         bubbleActive = false;
@@ -239,6 +319,10 @@ function connectWs() {
 
 function sendChat(text) {
   if (!text || !pos) return;
+  if (isSendOnCooldown()) {
+    refreshCooldownUi();
+    return;
+  }
   if (isWsOpen()) {
     activeSocket.send(
       JSON.stringify({ type: "chat", message: text, latitude: pos.lat, longitude: pos.lng })
@@ -246,11 +330,21 @@ function sendChat(text) {
     activeSocket.send(
       JSON.stringify({ type: "typing", typing: false, latitude: pos.lat, longitude: pos.lng })
     );
+    startSendCooldown();
     return;
   }
   outboundQueue.push({ kind: "chat", text });
+<<<<<<< Updated upstream
   setComposerHint("Will send when connected…");
+<<<<<<< Updated upstream
   if (allowReconnect && bubbleActive) connectWs();
+=======
+  if (pos && bubbleActive) connectWs();
+=======
+  setComposerHint("Will send when connected…", { kind: "info" });
+  if (allowReconnect && bubbleActive) connectWs();
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
 }
 
 function sendTyping(typing) {
@@ -380,6 +474,10 @@ function setupComposer() {
       return;
     }
     if (!bubbleActive) return;
+    if (isSendOnCooldown()) {
+      refreshCooldownUi();
+      return;
+    }
     sendChat(text);
     $("#chat-input").value = "";
   });
@@ -411,9 +509,20 @@ function main() {
 window.addEventListener("pagehide", () => {
   allowReconnect = false;
   if (reconnectTimer) clearTimeout(reconnectTimer);
+<<<<<<< Updated upstream
   if (stopLocation) stopLocation();
   if (activeSocket) detachSocket(activeSocket);
   activeSocket = null;
+=======
+<<<<<<< Updated upstream
+  if (ws) ws.close();
+=======
+  if (sendCooldownTick) clearInterval(sendCooldownTick);
+  if (stopLocation) stopLocation();
+  if (activeSocket) detachSocket(activeSocket);
+  activeSocket = null;
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
 });
 
 main();
