@@ -224,8 +224,12 @@ function setupIdentity() {
 /* --- Chat room UI --- */
 
 function showWelcome() {
-  $("#welcome-state")?.removeAttribute("hidden");
-  $("#chat-thread")?.setAttribute("hidden", "hidden");
+  const panel = $("#chat-panel");
+  const thread = $("#chat-thread");
+  panel?.classList.add("chat-panel--idle");
+  thread?.setAttribute("hidden", "hidden");
+  const messages = $("#messages");
+  if (messages) messages.innerHTML = "";
   $("#chat-input")?.setAttribute("disabled", "disabled");
   $("#btn-send")?.setAttribute("disabled", "disabled");
   $("#bubble-title").textContent = "Pick a bubble";
@@ -235,8 +239,10 @@ function showWelcome() {
 }
 
 function showThread() {
-  $("#welcome-state")?.setAttribute("hidden", "hidden");
-  $("#chat-thread")?.removeAttribute("hidden");
+  const panel = $("#chat-panel");
+  const thread = $("#chat-thread");
+  panel?.classList.remove("chat-panel--idle");
+  thread?.removeAttribute("hidden");
   $("#chat-input")?.removeAttribute("disabled");
   if (!isSendOnCooldown()) $("#btn-send")?.removeAttribute("disabled");
 }
@@ -561,6 +567,15 @@ function onEnterBubble() {
   bubbleActive = true;
   reconnectAttempt = 0;
   showThread();
+  const messages = $("#messages");
+  if (messages) {
+    messages.innerHTML = "";
+    const ph = document.createElement("p");
+    ph.className = "messages-placeholder";
+    ph.id = "messages-placeholder";
+    ph.textContent = "Loading messages…";
+    messages.appendChild(ph);
+  }
   loadBubbleMeta();
   loadHistory();
   if (pos) connectWs();

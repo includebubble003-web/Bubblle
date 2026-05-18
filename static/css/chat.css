@@ -1,5 +1,9 @@
 /* Bubblle — unified live chat shell */
 
+[hidden] {
+  display: none !important;
+}
+
 .chat-body {
   margin: 0;
   height: 100%;
@@ -284,22 +288,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.welcome-state {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  text-align: center;
-}
-
-.welcome-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  margin: 0 0 8px;
+  position: relative;
 }
 
 .chat-thread {
@@ -307,6 +296,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .thread-banner {
