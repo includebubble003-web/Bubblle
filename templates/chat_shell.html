@@ -40,6 +40,17 @@
         ☰
       </button>
 
+      <div class="topbar-room" id="room-meta">
+        <div class="topbar-room-head">
+          <h1 class="room-title" id="bubble-title">Pick a bubble</h1>
+          <span class="conn-dot" id="conn-dot" data-state="idle" title="Chat connection"></span>
+        </div>
+        <div class="room-stats">
+          <span class="room-stat" id="bubble-expiry"></span>
+          <span class="room-stat room-stat-accent" id="online-count"></span>
+        </div>
+      </div>
+
       <div class="identity" id="identity">
         <span class="identity-dot" aria-hidden="true"></span>
         <input
@@ -51,13 +62,6 @@
           aria-label="Display name"
         />
         <button type="button" class="btn btn-ghost btn-sm identity-save" id="btn-save-name" title="Save name">✓</button>
-      </div>
-
-      <div class="room-meta" id="room-meta">
-        <h1 class="room-title" id="bubble-title">Pick a bubble</h1>
-        <span class="conn-dot" id="conn-dot" data-state="idle" title="Chat connection"></span>
-        <span class="pill pill-sm" id="bubble-expiry"></span>
-        <span class="pill pill-sm pill-accent" id="online-count"></span>
       </div>
     </header>
 

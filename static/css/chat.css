@@ -170,9 +170,9 @@
 .chat-topbar {
   flex-shrink: 0;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 10px 14px;
+  gap: 12px;
   padding: 10px 14px;
   border-bottom: 1px solid #243044;
   background: rgba(12, 15, 20, 0.85);
@@ -239,23 +239,63 @@
   padding: 2px 8px;
 }
 
-.room-meta {
+.topbar-room {
+  flex: 1;
+  min-width: 0;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.topbar-room-head {
+  display: flex;
   align-items: center;
   gap: 8px;
-  flex: 2;
-  min-width: 160px;
+  min-width: 0;
 }
 
 .room-title {
+  flex: 1;
+  min-width: 0;
   font-size: 1rem;
   font-weight: 700;
   margin: 0;
+  line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
+}
+
+.room-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 1.1rem;
+  flex-wrap: wrap;
+}
+
+.room-stat {
+  font-size: 0.75rem;
+  color: #8b9bb8;
+  line-height: 1.2;
+}
+
+.room-stat:empty {
+  display: none;
+}
+
+.room-stat-accent {
+  color: #5eead4;
+}
+
+.room-stat:not(:empty) + .room-stat:not(:empty)::before {
+  content: "·";
+  margin-right: 8px;
+  color: #4b5563;
+}
+
+.room-stats:not(:has(.room-stat:not(:empty))) {
+  display: none;
 }
 
 .pill-sm {
@@ -570,20 +610,78 @@ body.drawer-open {
     display: block;
   }
 
-  .identity {
-    max-width: none;
-    flex: 1;
-    min-width: 0;
+  .chat-topbar {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr);
+    grid-template-areas:
+      "menu room"
+      "identity identity";
+    gap: 8px 10px;
+    padding: 8px 12px;
+    padding-top: max(8px, env(safe-area-inset-top));
+    align-items: start;
   }
 
-  .room-meta {
+  #btn-drawer {
+    grid-area: menu;
+    align-self: center;
+    width: 40px;
+    height: 40px;
+  }
+
+  .topbar-room {
+    grid-area: room;
+  }
+
+  .identity {
+    grid-area: identity;
+    max-width: none;
     width: 100%;
-    order: 3;
+    padding: 6px 10px;
+  }
+
+  .identity-dot {
+    display: none;
+  }
+
+  .identity-input {
+    font-size: 0.88rem;
+  }
+
+  .room-title {
+    font-size: 1.02rem;
+  }
+
+  .room-stats {
+    gap: 0;
+  }
+
+  .room-stat {
+    font-size: 0.72rem;
   }
 }
 
-@media (min-width: 769px) {
+@media (min-width: 901px) {
   .chat-topbar {
     padding: 12px 18px;
+  }
+
+  .identity {
+    order: 1;
+    flex: 0 1 220px;
+  }
+
+  .topbar-room {
+    order: 2;
+    align-items: flex-end;
+    text-align: right;
+  }
+
+  .topbar-room-head {
+    justify-content: flex-end;
+  }
+
+  .room-stats {
+    justify-content: flex-end;
   }
 }
