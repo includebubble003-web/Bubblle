@@ -587,22 +587,61 @@ function onEnterBubble() {
 
 /* --- Drawer (mobile) --- */
 
-function setupDrawer() {
+function setDrawerOpen(open) {
   const sidebar = $("#sidebar");
   const backdrop = $("#drawer-backdrop");
-  const open = () => {
-    sidebar?.classList.add("is-open");
-    backdrop?.removeAttribute("hidden");
+  const btn = $("#btn-drawer");
+  if (!sidebar || !backdrop) return;
+
+  if (open) {
+    sidebar.classList.add("is-open");
+    sidebar.setAttribute("aria-hidden", "false");
+    backdrop.removeAttribute("hidden");
+    backdrop.setAttribute("aria-hidden", "false");
+    btn?.setAttribute("aria-expanded", "true");
+    document.body.classList.add("drawer-open");
+  } else {
+    sidebar.classList.remove("is-open");
+    if (window.matchMedia("(max-width: 900px)").matches) {
+      sidebar.setAttribute("aria-hidden", "true");
+    } else {
+      sidebar.removeAttribute("aria-hidden");
+    }
+    backdrop.setAttribute("hidden", "hidden");
+    backdrop.setAttribute("aria-hidden", "true");
+    btn?.setAttribute("aria-expanded", "false");
+    document.body.classList.remove("drawer-open");
+  }
+}
+
+function setupDrawer() {
+  const btn = $("#btn-drawer");
+  const backdrop = $("#drawer-backdrop");
+  const sidebar = $("#sidebar");
+  if (!btn || !backdrop || !sidebar) return;
+
+  btn.setAttribute("aria-expanded", "false");
+  btn.setAttribute("aria-controls", "sidebar");
+
+  const openDrawer = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDrawerOpen(true);
   };
-  const close = () => {
-    sidebar?.classList.remove("is-open");
-    backdrop?.setAttribute("hidden", "hidden");
-  };
-  $("#btn-drawer")?.addEventListener("click", open);
-  backdrop?.addEventListener("click", close);
+
+  btn.addEventListener("click", openDrawer);
+  backdrop.addEventListener("click", () => setDrawerOpen(false));
   $("#sidebar-bubbles")?.addEventListener("click", (e) => {
-    if (e.target.closest("a")) close();
+    if (e.target.closest("a")) setDrawerOpen(false);
   });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") setDrawerOpen(false);
+  });
+
+  if (window.matchMedia("(max-width: 900px)").matches) {
+    sidebar.setAttribute("aria-hidden", "true");
+  }
 }
 
 /* --- Init --- */

@@ -177,6 +177,8 @@
   border-bottom: 1px solid #243044;
   background: rgba(12, 15, 20, 0.85);
   backdrop-filter: blur(12px);
+  position: relative;
+  z-index: 50;
 }
 
 .identity {
@@ -515,12 +517,35 @@
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.55);
-  z-index: 35;
+  z-index: 80;
+  touch-action: manipulation;
 }
 
-@media (max-width: 768px) {
+body.drawer-open {
+  overflow: hidden;
+}
+
+@media (max-width: 900px) {
   .mobile-only {
     display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 51;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .chat-app {
+    overflow: visible;
+  }
+
+  .chat-main {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    width: 100%;
   }
 
   .sidebar {
@@ -530,10 +555,15 @@
     bottom: 0;
     transform: translateX(-100%);
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
+    z-index: 90;
+    pointer-events: none;
+    visibility: hidden;
   }
 
   .sidebar.is-open {
     transform: translateX(0);
+    pointer-events: auto;
+    visibility: visible;
   }
 
   .drawer-backdrop:not([hidden]) {
@@ -543,6 +573,7 @@
   .identity {
     max-width: none;
     flex: 1;
+    min-width: 0;
   }
 
   .room-meta {
