@@ -837,22 +837,23 @@ async function main() {
   setupCreate();
   $("#btn-refresh-bubbles")?.addEventListener("click", () => refreshSidebar());
 
-  try {
-    const session = await bootstrapSession();
-    myName = session.anonymous_name || cachedDisplayName();
-    const input = $("#display-name");
-    if (input && myName) input.value = myName;
-  } catch {
-    setSidebarEmpty("Session error — refresh.");
-  }
-
   if (bubbleId) {
     showThread();
   } else {
     showWelcome();
   }
 
+  // Request location immediately — do not wait on session/network first.
   startLocation();
+
+  try {
+    const session = await bootstrapSession();
+    myName = session.anonymous_name || cachedDisplayName();
+    const input = $("#display-name");
+    if (input && myName) input.value = myName;
+  } catch {
+    if (!pos) setSidebarEmpty("Session error — refresh.");
+  }
 
   window.addEventListener("pagehide", () => {
     stopNearbyPolling();

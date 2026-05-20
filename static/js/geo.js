@@ -1,6 +1,18 @@
-/** Browser geolocation — fast first fix, then optional refine. */
+/** Browser geolocation — prompt quickly, then refine. */
 
 export const POS_CACHE_KEY = "bbl_last_pos";
+
+const FAST_OPTS = {
+  enableHighAccuracy: false,
+  maximumAge: 120_000,
+  timeout: 8_000,
+};
+
+const WATCH_OPTS = {
+  enableHighAccuracy: false,
+  maximumAge: 120_000,
+  timeout: 10_000,
+};
 
 export function isGeolocationContextOk() {
   if (typeof window === "undefined") return false;
@@ -72,7 +84,7 @@ export async function geolocationPermissionState() {
 }
 
 /**
- * Acquire location: cache → watchPosition (fast) → optional GPS refine.
+ * Acquire location: cache → immediate getCurrentPosition (prompt) → watchPosition.
  * Calls onUpdate for each useful fix. Returns cleanup function.
  *
  * @param {{ onUpdate: (p: {lat:number,lng:number}, meta: {source:string}) => void, onError?: (err: unknown) => void, onStatus?: (s: string) => void }} handlers
@@ -88,9 +100,10 @@ export function acquireLocation({ onUpdate, onError, onStatus }) {
   }
 
   let watchId = null;
-  let overallTimer = null;
+  let fallbackTimer = null;
   let gotFix = false;
   let cleaned = false;
+  let reportedError = false;
 
   const cleanup = () => {
     if (cleaned) return;
@@ -99,13 +112,30 @@ export function acquireLocation({ onUpdate, onError, onStatus }) {
       navigator.geolocation.clearWatch(watchId);
       watchId = null;
     }
-    if (overallTimer) clearTimeout(overallTimer);
+    if (fallbackTimer) clearTimeout(fallbackTimer);
   };
 
   const deliver = (p, source) => {
     const point = { lat: p.lat, lng: p.lng };
     cachePosition(point);
     onUpdate(point, { source });
+  };
+
+  const handleSuccess = (pos, source) => {
+    if (gotFix) return;
+    gotFix = true;
+    onStatus?.("fast");
+    deliver(toPoint(pos), source);
+    cleanup();
+    refineInBackground(onUpdate);
+  };
+
+  const handleError = (err) => {
+    if (gotFix || reportedError) return;
+    reportedError = true;
+    cleanup();
+    onError?.(err);
+    onStatus?.("error");
   };
 
   const cached = readCachedPosition();
@@ -115,51 +145,46 @@ export function acquireLocation({ onUpdate, onError, onStatus }) {
     deliver(cached, "cached");
   }
 
-  geolocationPermissionState().then((perm) => {
-    if (perm === "granted") onStatus?.("detecting");
-    else onStatus?.("prompt");
-  });
+  // Do not wait on Permissions API — getCurrentPosition triggers the browser prompt immediately.
+  const requestFix = () => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => handleSuccess(pos, "fast"),
+      (err) => handleError(err),
+      FAST_OPTS
+    );
+  };
 
-  // watchPosition often returns faster than getCurrentPosition on cold start
+  if (!gotFix) {
+    onStatus?.("prompt");
+    requestFix();
+  }
+
   watchId = navigator.geolocation.watchPosition(
     (pos) => {
-      const p = toPoint(pos);
-      if (!gotFix) {
-        gotFix = true;
-        onStatus?.("fast");
-        deliver(p, "fast");
-        cleanup();
-        refineInBackground(onUpdate);
-        return;
-      }
+      if (!gotFix) handleSuccess(pos, "fast");
     },
-    () => {
-      /* watch error — try getCurrentPosition fallback below */
-    },
-    { enableHighAccuracy: false, maximumAge: 600_000, timeout: 12_000 }
+    () => {},
+    WATCH_OPTS
   );
 
-  overallTimer = setTimeout(() => {
-    if (gotFix || cleaned) return;
-    cleanup();
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        if (!gotFix) {
-          gotFix = true;
-          onStatus?.("fast");
-          deliver(toPoint(pos), "fast");
-          refineInBackground(onUpdate);
+  // Permissions API only updates status text (denied → clear message without waiting on timeouts).
+  geolocationPermissionState().then((perm) => {
+    if (perm === "granted" && !gotFix) onStatus?.("detecting");
+    else if (perm === "prompt" && !gotFix) onStatus?.("prompt");
+    else if (perm === "denied" && !gotFix) {
+      onStatus?.("error");
+      setTimeout(() => {
+        if (!gotFix && !reportedError) {
+          handleError(new Error("Location blocked. Allow it in site settings, then reload."));
         }
-      },
-      (err) => {
-        if (!gotFix) {
-          onError?.(err);
-          onStatus?.("error");
-        }
-      },
-      { enableHighAccuracy: false, maximumAge: 600_000, timeout: 12_000 }
-    );
-  }, 14_000);
+      }, 400);
+    }
+  });
+
+  fallbackTimer = setTimeout(() => {
+    if (gotFix || cleaned || reportedError) return;
+    requestFix();
+  }, 3_000);
 
   return cleanup;
 }
