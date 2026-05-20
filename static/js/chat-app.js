@@ -7,6 +7,7 @@ import {
   formatGeolocationError,
   isGeolocationContextOk,
   readCachedPosition,
+  requestLocationOnce,
   secureContextHint,
 } from "./geo.js";
 
@@ -119,7 +120,6 @@ function applyPosition(p, { quiet = false } = {}) {
   pos = p;
   $("#f-lat").value = String(p.lat);
   $("#f-lng").value = String(p.lng);
-  $("#btn-create").disabled = false;
   setLocPill("ok");
   if (!quiet) setSidebarEmpty("");
   refreshSidebar();
@@ -137,30 +137,44 @@ function startLocation() {
   }
 
   const cached = readCachedPosition();
-  if (cached) applyPosition(cached, { quiet: true });
-
-  if (!pos) {
-    setLocPill("loading");
-    setSidebarEmpty("Allow location when prompted…");
+  if (cached) {
+    applyPosition(cached, { quiet: true });
+    if (stopLocation) stopLocation();
+    stopLocation = acquireLocation({
+      onUpdate: (p, meta) => applyPosition(p, { quiet: meta.source === "refined" }),
+      onError: () => {},
+    });
+    return;
   }
 
-  if (stopLocation) stopLocation();
-  stopLocation = acquireLocation({
-    onUpdate: (p, meta) => {
-      applyPosition(p, { quiet: meta.source === "refined" });
-    },
-    onError: (err) => {
-      if (!pos) {
-        setLocPill("error");
-        setSidebarEmpty(formatGeolocationError(err));
-      }
-    },
-    onStatus: (s) => {
-      if (pos) return;
-      if (s === "prompt") setSidebarEmpty("Tap Allow for location…");
-      else if (s === "detecting" || s === "fast") setLocPill("loading");
-    },
-  });
+  setLocPill("idle");
+  setSidebarEmpty("Tap + Create to allow location, or ↻ to refresh nearby.");
+}
+
+async function ensureLocation({ hint = "Allow location to continue…" } = {}) {
+  if (pos) return pos;
+  if (!isGeolocationContextOk()) {
+    const msg = secureContextHint();
+    setLocPill("error", msg);
+    setSidebarEmpty(msg);
+    throw new Error(msg);
+  }
+  setLocPill("loading");
+  setSidebarEmpty(hint);
+  try {
+    const p = await requestLocationOnce();
+    applyPosition(p);
+    if (stopLocation) stopLocation();
+    stopLocation = acquireLocation({
+      onUpdate: (point, meta) => applyPosition(point, { quiet: meta.source === "refined" }),
+      onError: () => {},
+    });
+    return p;
+  } catch (err) {
+    setLocPill("error");
+    setSidebarEmpty(formatGeolocationError(err));
+    throw err;
+  }
 }
 
 /* --- Sidebar --- */
@@ -800,16 +814,16 @@ function setupComposer() {
 function setupCreate() {
   $("#create-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
-    if (!pos) {
-      startLocation();
-      return;
-    }
-    await saveName();
     const title = e.target.title.value.trim();
     if (!title) return;
+
     const btn = $("#btn-create");
     btn.disabled = true;
     try {
+      if (!pos) {
+        await ensureLocation({ hint: "Allow location to create your bubble…" });
+      }
+      await saveName();
       const res = await fetch("/api/bubbles/", {
         method: "POST",
         credentials: "include",
@@ -817,12 +831,13 @@ function setupCreate() {
         body: JSON.stringify({ title, latitude: pos.lat, longitude: pos.lng }),
       });
       if (!res.ok) {
-        btn.disabled = false;
         return;
       }
       const b = await res.json();
       window.location.href = `/bubble/${b.id}/`;
     } catch {
+      /* location denied or network error — message already in sidebar */
+    } finally {
       btn.disabled = false;
     }
   });
@@ -835,7 +850,14 @@ async function main() {
   setupMessageReplies();
   setupComposer();
   setupCreate();
-  $("#btn-refresh-bubbles")?.addEventListener("click", () => refreshSidebar());
+  $("#btn-refresh-bubbles")?.addEventListener("click", async () => {
+    try {
+      if (!pos) await ensureLocation({ hint: "Allow location to see nearby bubbles…" });
+      refreshSidebar();
+    } catch {
+      /* hint shown in sidebar */
+    }
+  });
 
   if (bubbleId) {
     showThread();

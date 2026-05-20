@@ -200,6 +200,37 @@ function refineInBackground(onUpdate) {
   );
 }
 
+/**
+ * One-shot location (for button clicks). User gesture helps the browser show the prompt.
+ * @returns {Promise<{lat: number, lng: number}>}
+ */
+export function requestLocationOnce() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("Geolocation not supported"));
+      return;
+    }
+    if (!isGeolocationContextOk()) {
+      reject(new Error(secureContextHint()));
+      return;
+    }
+    const cached = readCachedPosition();
+    if (cached) {
+      resolve(cached);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        cachePosition(p);
+        resolve(p);
+      },
+      (err) => reject(err),
+      { enableHighAccuracy: false, maximumAge: 120_000, timeout: 15_000 }
+    );
+  });
+}
+
 /** @deprecated use acquireLocation */
 export function getCurrentPosition(options = {}) {
   return new Promise((resolve, reject) => {
