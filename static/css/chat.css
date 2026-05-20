@@ -399,6 +399,9 @@
   display: flex;
   margin-bottom: 10px;
   animation: msg-in 0.28s ease-out backwards;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .msg-bubble-mine {
@@ -411,6 +414,11 @@
   border-radius: 16px;
   border: 1px solid #243044;
   background: #141a24;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.msg-bubble:active .msg-bubble-inner {
+  filter: brightness(1.08);
 }
 
 .msg-bubble-mine .msg-bubble-inner {
@@ -445,6 +453,101 @@
   color: #8b9bb8;
   margin-top: 6px;
   text-align: right;
+}
+
+.msg-reply-quote {
+  display: block;
+  margin-bottom: 6px;
+  padding: 6px 8px 6px 10px;
+  border-left: 3px solid #5eead4;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.msg-bubble-mine .msg-reply-quote {
+  border-left-color: #7c9cff;
+}
+
+.msg-reply-author {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #5eead4;
+  margin-bottom: 2px;
+}
+
+.msg-bubble-mine .msg-reply-author {
+  color: #a5b4fc;
+}
+
+.msg-reply-text {
+  display: block;
+  font-size: 0.78rem;
+  color: #8b9bb8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reply-compose {
+  margin-bottom: 8px;
+}
+
+.reply-compose-inner {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(94, 234, 212, 0.08);
+  border: 1px solid rgba(94, 234, 212, 0.25);
+}
+
+.reply-compose-bar {
+  width: 3px;
+  border-radius: 2px;
+  background: #5eead4;
+  flex-shrink: 0;
+}
+
+.reply-compose-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.reply-compose-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #5eead4;
+  margin-bottom: 2px;
+}
+
+.reply-compose-preview {
+  display: block;
+  font-size: 0.82rem;
+  color: #c5d0e6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reply-compose-cancel {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #8b9bb8;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.reply-compose-cancel:active {
+  background: rgba(255, 255, 255, 0.12);
 }
 
 @keyframes msg-in {

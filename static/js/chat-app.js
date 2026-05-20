@@ -35,6 +35,8 @@ let lastTypingSent = 0;
 let sendCooldownUntil = 0;
 let sendCooldownTick = null;
 const outboundQueue = [];
+const messageById = new Map();
+let pendingReply = null;
 
 function escapeHtml(s) {
   return String(s)
@@ -42,6 +44,46 @@ function escapeHtml(s) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+function truncateText(s, max = 80) {
+  const t = String(s || "").trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1)}…`;
+}
+
+function rememberMessage(m) {
+  if (m?.id) messageById.set(String(m.id), m);
+}
+
+function replyQuoteHtml(reply) {
+  if (!reply?.anonymous_name) return "";
+  return `<div class="msg-reply-quote">
+    <span class="msg-reply-author">${escapeHtml(reply.anonymous_name)}</span>
+    <span class="msg-reply-text">${escapeHtml(truncateText(reply.message))}</span>
+  </div>`;
+}
+
+function setReplyTarget(m) {
+  if (!m?.id || !bubbleActive) return;
+  pendingReply = {
+    id: String(m.id),
+    anonymous_name: m.anonymous_name,
+    message: m.message,
+  };
+  const bar = $("#reply-compose");
+  const label = $("#reply-compose-label");
+  const preview = $("#reply-compose-preview");
+  const input = $("#chat-input");
+  if (label) label.textContent = `Reply to ${m.anonymous_name}`;
+  if (preview) preview.textContent = truncateText(m.message, 100);
+  bar?.removeAttribute("hidden");
+  input?.focus();
+}
+
+function clearReply() {
+  pendingReply = null;
+  $("#reply-compose")?.setAttribute("hidden", "hidden");
 }
 
 function fmtRemaining(sec) {
@@ -230,6 +272,8 @@ function showWelcome() {
   $("#chat-idle-prompt")?.removeAttribute("hidden");
   thread?.setAttribute("hidden", "hidden");
   $("#chat-composer")?.setAttribute("hidden", "hidden");
+  clearReply();
+  messageById.clear();
   const messages = $("#messages");
   if (messages) messages.innerHTML = "";
   $("#chat-input")?.setAttribute("disabled", "disabled");
@@ -324,13 +368,19 @@ function scrollMessages() {
 
 function appendMessage(m, opts = { scroll: true }) {
   clearMessagesPlaceholder();
+  rememberMessage(m);
   const list = $("#messages");
   const mine = myName && m.anonymous_name === myName;
   const row = document.createElement("div");
   row.className = `msg-bubble${mine ? " msg-bubble-mine" : ""}`;
+  row.dataset.messageId = String(m.id);
+  row.setAttribute("role", "button");
+  row.setAttribute("tabindex", "0");
+  row.setAttribute("aria-label", `Reply to message from ${m.anonymous_name}`);
   const t = new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   row.innerHTML = `
     <div class="msg-bubble-inner">
+      ${replyQuoteHtml(m.reply_to)}
       ${mine ? "" : `<span class="msg-author">${escapeHtml(m.anonymous_name)}</span>`}
       <p class="msg-text">${escapeHtml(m.message)}</p>
       <span class="msg-time">${t}</span>
@@ -389,18 +439,22 @@ function detachSocket(socket) {
   }
 }
 
+function chatPayload(text, replyTo = pendingReply) {
+  const payload = {
+    type: "chat",
+    message: text,
+    latitude: pos.lat,
+    longitude: pos.lng,
+  };
+  if (replyTo?.id) payload.reply_to = replyTo.id;
+  return payload;
+}
+
 function flushOutboundQueue() {
   if (!isWsOpen() || !pos || !outboundQueue.length || isSendOnCooldown()) return;
   const item = outboundQueue.shift();
   if (item?.kind === "chat") {
-    activeSocket.send(
-      JSON.stringify({
-        type: "chat",
-        message: item.text,
-        latitude: pos.lat,
-        longitude: pos.lng,
-      })
-    );
+    activeSocket.send(JSON.stringify(chatPayload(item.text, item.replyTo)));
   }
 }
 
@@ -470,6 +524,7 @@ function connectWs() {
       }
     } else if (data.type === "error") {
       if (data.code === "slow_down") startSendCooldown();
+      else if (data.code === "invalid_reply") setComposerHint("Could not reply to that message.", { kind: "cooldown" });
       else if (data.code === "out_of_radius") setStatus("You moved outside the bubble.", true);
       else if (data.code === "bubble_closed") {
         bubbleActive = false;
@@ -489,15 +544,15 @@ function sendChat(text) {
     return;
   }
   if (isWsOpen()) {
-    activeSocket.send(
-      JSON.stringify({ type: "chat", message: text, latitude: pos.lat, longitude: pos.lng })
-    );
+    activeSocket.send(JSON.stringify(chatPayload(text)));
     activeSocket.send(
       JSON.stringify({ type: "typing", typing: false, latitude: pos.lat, longitude: pos.lng })
     );
+    clearReply();
     return;
   }
-  outboundQueue.push({ kind: "chat", text });
+  outboundQueue.push({ kind: "chat", text, replyTo: pendingReply ? { ...pendingReply } : null });
+  clearReply();
   setComposerHint("Sending when live…", { kind: "info" });
   connectWs();
 }
@@ -555,6 +610,7 @@ function loadHistory() {
 
 function teardownChat() {
   allowReconnect = false;
+  clearReply();
   if (reconnectTimer) clearTimeout(reconnectTimer);
   if (activeSocket) detachSocket(activeSocket);
   activeSocket = null;
@@ -571,6 +627,8 @@ function onEnterBubble() {
   bubbleActive = true;
   reconnectAttempt = 0;
   showThread();
+  messageById.clear();
+  clearReply();
   const messages = $("#messages");
   if (messages) {
     messages.innerHTML = "";
@@ -642,6 +700,61 @@ function setupDrawer() {
   if (window.matchMedia("(max-width: 900px)").matches) {
     sidebar.setAttribute("aria-hidden", "true");
   }
+}
+
+/* --- Reply interactions --- */
+
+function setupReplyComposer() {
+  $("#reply-compose-cancel")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    clearReply();
+  });
+}
+
+function setupMessageReplies() {
+  const list = $("#messages");
+  if (!list) return;
+
+  const pickMessage = (row) => {
+    if (!row?.dataset.messageId || !bubbleActive) return;
+    const m = messageById.get(row.dataset.messageId);
+    if (m) setReplyTarget(m);
+  };
+
+  list.addEventListener("click", (e) => {
+    const row = e.target.closest(".msg-bubble");
+    if (row) pickMessage(row);
+  });
+
+  list.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const row = e.target.closest(".msg-bubble");
+    if (!row) return;
+    e.preventDefault();
+    pickMessage(row);
+  });
+
+  let touchRow = null;
+  let touchStartX = 0;
+  list.addEventListener(
+    "touchstart",
+    (e) => {
+      touchRow = e.target.closest(".msg-bubble");
+      touchStartX = touchRow ? e.touches[0].clientX : 0;
+    },
+    { passive: true }
+  );
+  list.addEventListener(
+    "touchend",
+    (e) => {
+      if (!touchRow) return;
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      if (dx > 48) pickMessage(touchRow);
+      touchRow = null;
+    },
+    { passive: true }
+  );
 }
 
 /* --- Init --- */
@@ -718,6 +831,8 @@ function setupCreate() {
 async function main() {
   setupIdentity();
   setupDrawer();
+  setupReplyComposer();
+  setupMessageReplies();
   setupComposer();
   setupCreate();
   $("#btn-refresh-bubbles")?.addEventListener("click", () => refreshSidebar());

@@ -37,9 +37,22 @@ class MessageCreateSerializer(serializers.Serializer):
     message = serializers.CharField(max_length=2000, allow_blank=False, trim_whitespace=True)
     latitude = serializers.FloatField(min_value=-90, max_value=90)
     longitude = serializers.FloatField(min_value=-180, max_value=180)
+    reply_to = serializers.UUIDField(required=False, allow_null=True)
 
 
 class MessageOutSerializer(serializers.ModelSerializer):
+    reply_to = serializers.SerializerMethodField()
+
     class Meta:
         model = Message
-        fields = ("id", "anonymous_name", "message", "created_at")
+        fields = ("id", "anonymous_name", "message", "created_at", "reply_to")
+
+    def get_reply_to(self, obj: Message):
+        parent = getattr(obj, "reply_to", None)
+        if not obj.reply_to_id or not parent:
+            return None
+        return {
+            "id": str(parent.id),
+            "anonymous_name": parent.anonymous_name,
+            "message": parent.message,
+        }

@@ -83,6 +83,16 @@
 
     <footer class="chat-composer" id="chat-composer" hidden>
       <p class="composer-typing" id="typing" hidden></p>
+      <div class="reply-compose" id="reply-compose" hidden>
+        <div class="reply-compose-inner">
+          <span class="reply-compose-bar" aria-hidden="true"></span>
+          <div class="reply-compose-body">
+            <span class="reply-compose-label" id="reply-compose-label"></span>
+            <span class="reply-compose-preview" id="reply-compose-preview"></span>
+          </div>
+          <button type="button" class="reply-compose-cancel" id="reply-compose-cancel" aria-label="Cancel reply">×</button>
+        </div>
+      </div>
       <form id="chat-form" class="composer-form">
         <input id="chat-input" autocomplete="off" maxlength="2000" placeholder="Message…" disabled />
         <button class="btn btn-primary" type="submit" id="btn-send" disabled>Send</button>
