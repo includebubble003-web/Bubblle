@@ -14,7 +14,14 @@ from sessions_app.models import AnonymousSession
 from .models import Bubble, Message
 from .serializers import BubbleCreateSerializer, MessageCreateSerializer, MessageOutSerializer
 from .membership import membership_clear
-from .services import active_user_count, haversine_distance_m, serialize_bubble_summary, throttle_allow
+from .services import (
+    active_user_count,
+    get_reply_parent,
+    haversine_distance_m,
+    serialize_bubble_summary,
+    serialize_message,
+    throttle_allow,
+)
 
 
 def _anonymous_session_for_request(request) -> AnonymousSession | None:
@@ -162,7 +169,11 @@ def bubble_messages(request, bubble_id: UUID):
             limit = 50
         limit = max(1, min(limit, 100))
 
-        qs = Message.objects.filter(bubble=bubble).order_by("-created_at")[:limit]
+        qs = (
+            Message.objects.filter(bubble=bubble)
+            .select_related("reply_to")
+            .order_by("-created_at")[:limit]
+        )
         items = list(reversed(list(qs)))
         ser = MessageOutSerializer(items, many=True)
         return Response({"results": ser.data})
@@ -180,6 +191,10 @@ def bubble_messages(request, bubble_id: UUID):
     lat = ser.validated_data["latitude"]
     lng = ser.validated_data["longitude"]
     text = ser.validated_data["message"].strip()
+    reply_to_id = ser.validated_data.get("reply_to")
+    parent = get_reply_parent(bubble.id, reply_to_id) if reply_to_id else None
+    if reply_to_id and not parent:
+        return Response({"detail": "Reply target not found."}, status=status.HTTP_400_BAD_REQUEST)
 
     dist = haversine_distance_m(lat, lng, bubble.latitude, bubble.longitude)
     if dist > bubble.radius:
@@ -193,7 +208,10 @@ def bubble_messages(request, bubble_id: UUID):
         bubble=bubble,
         anonymous_name=session.anonymous_name,
         message=text,
+        reply_to=parent,
     )
+    if parent:
+        msg.reply_to = parent
 
     from asgiref.sync import async_to_sync
     from channels.layers import get_channel_layer
@@ -201,15 +219,7 @@ def bubble_messages(request, bubble_id: UUID):
     channel_layer = get_channel_layer()
     async_to_sync(channel_layer.group_send)(
         f"bubble_{bubble.id}",
-        {
-            "type": "bubble.chat",
-            "message": {
-                "id": str(msg.id),
-                "anonymous_name": msg.anonymous_name,
-                "message": msg.message,
-                "created_at": msg.created_at.isoformat(),
-            },
-        },
+        {"type": "bubble.chat", "message": serialize_message(msg)},
     )
 
     return Response(MessageOutSerializer(msg).data, status=status.HTTP_201_CREATED)

@@ -9,7 +9,7 @@ from uuid import UUID
 from django.utils import timezone
 
 from .membership import membership_count
-from .models import Bubble
+from .models import Bubble, Message
 
 
 def haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -43,6 +43,31 @@ def bubble_channel_group(bubble_id: UUID | str) -> str:
 def active_user_count(bubble_id: UUID | str) -> int:
     """Connected WebSocket clients currently in the bubble."""
     return membership_count(bubble_id)
+
+
+def get_reply_parent(bubble_id: UUID, reply_to_id: UUID | None) -> Message | None:
+    """Resolve a reply target; must belong to the same bubble."""
+    if not reply_to_id:
+        return None
+    return Message.objects.filter(id=reply_to_id, bubble_id=bubble_id).select_related("reply_to").first()
+
+
+def serialize_message(msg: Message) -> dict:
+    """Wire + REST payload for a chat line (includes optional reply preview)."""
+    payload = {
+        "id": str(msg.id),
+        "anonymous_name": msg.anonymous_name,
+        "message": msg.message,
+        "created_at": msg.created_at.isoformat(),
+    }
+    parent = getattr(msg, "reply_to", None)
+    if msg.reply_to_id and parent:
+        payload["reply_to"] = {
+            "id": str(parent.id),
+            "anonymous_name": parent.anonymous_name,
+            "message": parent.message,
+        }
+    return payload
 
 
 def serialize_bubble_summary(bubble: Bubble, viewer_lat: float, viewer_lng: float) -> dict:

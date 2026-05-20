@@ -9,7 +9,13 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
 from .models import Bubble, Message
 from .membership import membership_join, membership_leave
-from .services import bubble_channel_group, haversine_distance_m, throttle_allow
+from .services import (
+    bubble_channel_group,
+    get_reply_parent,
+    haversine_distance_m,
+    serialize_message,
+    throttle_allow,
+)
 
 
 def _parse_float(qs: dict, key: str) -> float | None:
@@ -141,16 +147,21 @@ class BubbleConsumer(AsyncJsonWebsocketConsumer):
             await self.send_json({"type": "error", "code": "bubble_closed"})
             return
 
-        msg = await self._persist_message(bubble, self.user_name, text)
-        payload = {
-            "type": "bubble.chat",
-            "message": {
-                "id": str(msg.id),
-                "anonymous_name": msg.anonymous_name,
-                "message": msg.message,
-                "created_at": msg.created_at.isoformat(),
-            },
-        }
+        reply_to_id = None
+        reply_raw = content.get("reply_to")
+        if reply_raw:
+            try:
+                reply_to_id = uuid.UUID(str(reply_raw))
+            except (ValueError, TypeError):
+                await self.send_json({"type": "error", "code": "invalid_reply"})
+                return
+
+        msg = await self._persist_message(bubble, self.user_name, text, reply_to_id)
+        if msg is None:
+            await self.send_json({"type": "error", "code": "invalid_reply"})
+            return
+
+        payload = {"type": "bubble.chat", "message": serialize_message(msg)}
         await self.channel_layer.group_send(self.group_name, payload)
 
     # --- group handlers ---
@@ -206,5 +217,22 @@ class BubbleConsumer(AsyncJsonWebsocketConsumer):
         return haversine_distance_m(lat, lng, b.latitude, b.longitude) <= b.radius
 
     @database_sync_to_async
-    def _persist_message(self, bubble: Bubble, anonymous_name: str, text: str) -> Message:
-        return Message.objects.create(bubble=bubble, anonymous_name=anonymous_name, message=text)
+    def _persist_message(
+        self,
+        bubble: Bubble,
+        anonymous_name: str,
+        text: str,
+        reply_to_id: uuid.UUID | None = None,
+    ) -> Message | None:
+        parent = get_reply_parent(bubble.id, reply_to_id) if reply_to_id else None
+        if reply_to_id and not parent:
+            return None
+        msg = Message.objects.create(
+            bubble=bubble,
+            anonymous_name=anonymous_name,
+            message=text,
+            reply_to=parent,
+        )
+        if parent:
+            msg.reply_to = parent
+        return msg
