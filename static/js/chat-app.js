@@ -21,6 +21,7 @@ const MSG_COOLDOWN_MS = 1000;
 const bubbleId = (window.__BUBBLE_ID__ || "").trim() || null;
 
 let myName = "";
+const myPreviousNames = new Set();
 let pos = null;
 let stopLocation = null;
 let nearbyPollTimer = null;
@@ -38,6 +39,9 @@ let sendCooldownTick = null;
 const outboundQueue = [];
 const messageById = new Map();
 let pendingReply = null;
+let lastSentReply = null;
+let expiryTickTimer = null;
+let bubbleExpiresAtMs = null;
 
 function escapeHtml(s) {
   return String(s)
@@ -65,6 +69,28 @@ function replyQuoteHtml(reply) {
   </div>`;
 }
 
+function scrollComposerIntoView() {
+  $("#chat-composer")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+function messageFromRow(row) {
+  if (!row?.dataset.messageId) return null;
+  const cached = messageById.get(row.dataset.messageId);
+  if (cached) return cached;
+
+  const authorEl = row.querySelector(".msg-author");
+  const textEl = row.querySelector(".msg-text");
+  const author = authorEl?.textContent?.trim() || (row.classList.contains("msg-bubble-mine") ? myName : "");
+  const text = textEl?.textContent || "";
+  if (!author && !text) return null;
+
+  return {
+    id: row.dataset.messageId,
+    anonymous_name: author || "Unknown",
+    message: text,
+  };
+}
+
 function setReplyTarget(m) {
   if (!m?.id || !bubbleActive) return;
   pendingReply = {
@@ -79,6 +105,8 @@ function setReplyTarget(m) {
   if (label) label.textContent = `Reply to ${m.anonymous_name}`;
   if (preview) preview.textContent = truncateText(m.message, 100);
   bar?.removeAttribute("hidden");
+  setComposerHint("");
+  scrollComposerIntoView();
   input?.focus();
 }
 
@@ -93,6 +121,114 @@ function fmtRemaining(sec) {
   const s = sec % 60;
   if (m > 0) return `${m}m ${s}s`;
   return `${s}s`;
+}
+
+function remainingSecFromExpiresAt(expiresAt) {
+  if (!expiresAt) return 0;
+  const ms = new Date(expiresAt).getTime();
+  if (Number.isNaN(ms)) return 0;
+  return Math.max(0, Math.floor((ms - Date.now()) / 1000));
+}
+
+function setBubbleExpiryFromMeta(b) {
+  if (!b) return;
+  if (b.expires_at) {
+    bubbleExpiresAtMs = new Date(b.expires_at).getTime();
+    if (Number.isNaN(bubbleExpiresAtMs)) bubbleExpiresAtMs = null;
+  } else if (typeof b.remaining_seconds === "number") {
+    bubbleExpiresAtMs = Date.now() + b.remaining_seconds * 1000;
+  }
+  updateRoomExpiryDisplay();
+}
+
+function updateRoomExpiryDisplay() {
+  const el = $("#bubble-expiry");
+  if (!el) return;
+  if (!bubbleExpiresAtMs) {
+    el.textContent = "";
+    return;
+  }
+  const sec = Math.max(0, Math.floor((bubbleExpiresAtMs - Date.now()) / 1000));
+  el.textContent = fmtRemaining(sec);
+  if (sec <= 0 && bubbleActive) {
+    bubbleActive = false;
+    allowReconnect = false;
+    setStatus("This bubble has ended.", true);
+    setConnDot("error");
+    if (activeSocket) detachSocket(activeSocket);
+    activeSocket = null;
+  }
+}
+
+function updateSidebarExpiryDisplays() {
+  document.querySelectorAll("#sidebar-bubbles .sidebar-bubble").forEach((li) => {
+    const id = li.dataset.bubbleId;
+    const b = nearbyBubbles.find((x) => x.id === id);
+    const span = li.querySelector(".sidebar-bubble-expiry");
+    if (!b || !span) return;
+    const sec = b.expires_at ? remainingSecFromExpiresAt(b.expires_at) : (b.remaining_seconds ?? 0);
+    span.textContent = fmtRemaining(sec);
+  });
+}
+
+function tickExpiryUi() {
+  updateRoomExpiryDisplay();
+  updateSidebarExpiryDisplays();
+}
+
+function startExpiryTicker() {
+  if (expiryTickTimer) return;
+  expiryTickTimer = setInterval(tickExpiryUi, 1000);
+}
+
+function stopExpiryTicker() {
+  if (expiryTickTimer) {
+    clearInterval(expiryTickTimer);
+    expiryTickTimer = null;
+  }
+}
+
+function isMyMessage(anonymousName) {
+  if (!anonymousName) return false;
+  if (myName && anonymousName === myName) return true;
+  return myPreviousNames.has(anonymousName);
+}
+
+function trackMyName(name) {
+  if (!name) return;
+  myName = name;
+  myPreviousNames.add(name);
+}
+
+function refreshChatIdentity(oldName, newName) {
+  for (const [id, m] of messageById) {
+    if (m.anonymous_name === oldName) {
+      m.anonymous_name = newName;
+      messageById.set(id, m);
+    }
+  }
+
+  document.querySelectorAll("#messages .msg-bubble").forEach((row) => {
+    const m = messageById.get(row.dataset.messageId);
+    if (!m) return;
+    const mine = isMyMessage(m.anonymous_name);
+    row.classList.toggle("msg-bubble-mine", mine);
+    row.setAttribute("aria-label", `Reply to message from ${m.anonymous_name}`);
+
+    const head = row.querySelector(".msg-bubble-head");
+    let author = row.querySelector(".msg-author");
+    if (mine) {
+      author?.remove();
+      return;
+    }
+    if (!head) return;
+    if (!author) {
+      author = document.createElement("span");
+      author.className = "msg-author";
+      head.insertBefore(author, head.firstChild);
+    }
+    author.textContent = m.anonymous_name;
+  });
 }
 
 function activeUsers(b) {
@@ -194,16 +330,19 @@ function renderSidebar() {
     const li = document.createElement("li");
     const isActive = bubbleId === b.id;
     li.className = `sidebar-bubble${isActive ? " is-active" : ""}`;
+    li.dataset.bubbleId = b.id;
+    const sec = b.expires_at ? remainingSecFromExpiresAt(b.expires_at) : (b.remaining_seconds ?? 0);
     li.innerHTML = `
       <a href="/bubble/${b.id}/" class="sidebar-bubble-link">
         <span class="sidebar-bubble-title">${escapeHtml(b.title)}</span>
         <span class="sidebar-bubble-meta">
           <span class="sidebar-bubble-count">${activeUsers(b)} active</span>
-          <span class="sidebar-bubble-expiry">${fmtRemaining(b.remaining_seconds)}</span>
+          <span class="sidebar-bubble-expiry">${fmtRemaining(sec)}</span>
         </span>
       </a>`;
     ul.appendChild(li);
   }
+  updateSidebarExpiryDisplays();
 }
 
 async function refreshSidebar() {
@@ -252,9 +391,15 @@ async function saveName() {
     return;
   }
   input.classList.remove("identity-input-error");
+  const previousName = myName;
   try {
     const data = await updateDisplayName(trimmed);
-    myName = data.anonymous_name;
+    const newName = data.anonymous_name;
+    trackMyName(newName);
+    input.value = newName;
+    if (previousName && previousName !== newName) {
+      refreshChatIdentity(previousName, newName);
+    }
     input.classList.add("identity-saved");
     setTimeout(() => input.classList.remove("identity-saved"), 600);
   } catch (err) {
@@ -294,6 +439,7 @@ function showWelcome() {
   $("#btn-send")?.setAttribute("disabled", "disabled");
   $("#bubble-title").textContent = "Pick a bubble";
   $("#bubble-expiry").textContent = "";
+  bubbleExpiresAtMs = null;
   $("#online-count").textContent = "";
   setConnDot("idle");
 }
@@ -384,7 +530,7 @@ function appendMessage(m, opts = { scroll: true }) {
   clearMessagesPlaceholder();
   rememberMessage(m);
   const list = $("#messages");
-  const mine = myName && m.anonymous_name === myName;
+  const mine = isMyMessage(m.anonymous_name);
   const row = document.createElement("div");
   row.className = `msg-bubble${mine ? " msg-bubble-mine" : ""}`;
   row.dataset.messageId = String(m.id);
@@ -395,7 +541,10 @@ function appendMessage(m, opts = { scroll: true }) {
   row.innerHTML = `
     <div class="msg-bubble-inner">
       ${replyQuoteHtml(m.reply_to)}
-      ${mine ? "" : `<span class="msg-author">${escapeHtml(m.anonymous_name)}</span>`}
+      <div class="msg-bubble-head">
+        ${mine ? "" : `<span class="msg-author">${escapeHtml(m.anonymous_name)}</span>`}
+        <button type="button" class="msg-reply-btn" aria-label="Reply to this message">Reply</button>
+      </div>
       <p class="msg-text">${escapeHtml(m.message)}</p>
       <span class="msg-time">${t}</span>
     </div>`;
@@ -524,6 +673,7 @@ function connectWs() {
     }
     if (data.type === "chat") {
       appendMessage(data.payload);
+      lastSentReply = null;
       $("#typing").hidden = true;
     } else if (data.type === "presence") {
       const n = data.active_users ?? data.online;
@@ -538,7 +688,11 @@ function connectWs() {
       }
     } else if (data.type === "error") {
       if (data.code === "slow_down") startSendCooldown();
-      else if (data.code === "invalid_reply") setComposerHint("Could not reply to that message.", { kind: "cooldown" });
+      else if (data.code === "invalid_reply") {
+        if (lastSentReply) setReplyTarget(lastSentReply);
+        lastSentReply = null;
+        setComposerHint("Could not reply to that message.", { kind: "cooldown" });
+      }
       else if (data.code === "out_of_radius") setStatus("You moved outside the bubble.", true);
       else if (data.code === "bubble_closed") {
         bubbleActive = false;
@@ -557,15 +711,18 @@ function sendChat(text) {
     refreshCooldownUi();
     return;
   }
+  const replySnapshot = pendingReply ? { ...pendingReply } : null;
   if (isWsOpen()) {
-    activeSocket.send(JSON.stringify(chatPayload(text)));
+    activeSocket.send(JSON.stringify(chatPayload(text, replySnapshot)));
     activeSocket.send(
       JSON.stringify({ type: "typing", typing: false, latitude: pos.lat, longitude: pos.lng })
     );
+    lastSentReply = replySnapshot;
     clearReply();
     return;
   }
-  outboundQueue.push({ kind: "chat", text, replyTo: pendingReply ? { ...pendingReply } : null });
+  outboundQueue.push({ kind: "chat", text, replyTo: replySnapshot });
+  lastSentReply = replySnapshot;
   clearReply();
   setComposerHint("Sending when live…", { kind: "info" });
   connectWs();
@@ -583,7 +740,7 @@ function loadBubbleMeta() {
         return;
       }
       $("#bubble-title").textContent = b.title;
-      $("#bubble-expiry").textContent = fmtRemaining(b.remaining_seconds);
+      setBubbleExpiryFromMeta(b);
       const n = b.active_users ?? b.online_count;
       if (typeof n === "number") $("#online-count").textContent = `${n} active`;
       if (!b.active) {
@@ -731,12 +888,20 @@ function setupMessageReplies() {
   if (!list) return;
 
   const pickMessage = (row) => {
-    if (!row?.dataset.messageId || !bubbleActive) return;
-    const m = messageById.get(row.dataset.messageId);
+    if (!row?.dataset.messageId) return;
+    if (!bubbleActive) {
+      setComposerHint("This bubble has ended.", { kind: "muted" });
+      return;
+    }
+    const m = messageFromRow(row);
     if (m) setReplyTarget(m);
   };
 
   list.addEventListener("click", (e) => {
+    if (e.target.closest(".msg-reply-btn")) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     const row = e.target.closest(".msg-bubble");
     if (row) pickMessage(row);
   });
@@ -865,12 +1030,14 @@ async function main() {
     showWelcome();
   }
 
+  startExpiryTicker();
+
   // Request location immediately — do not wait on session/network first.
   startLocation();
 
   try {
     const session = await bootstrapSession();
-    myName = session.anonymous_name || cachedDisplayName();
+    trackMyName(session.anonymous_name || cachedDisplayName());
     const input = $("#display-name");
     if (input && myName) input.value = myName;
   } catch {
@@ -879,6 +1046,7 @@ async function main() {
 
   window.addEventListener("pagehide", () => {
     stopNearbyPolling();
+    stopExpiryTicker();
     if (stopLocation) stopLocation();
     teardownChat();
     if (sendCooldownTick) clearInterval(sendCooldownTick);
