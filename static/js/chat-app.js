@@ -160,8 +160,8 @@ function updateRoomExpiryDisplay() {
   }
 }
 
-function updateSidebarExpiryDisplays() {
-  document.querySelectorAll("#sidebar-bubbles .sidebar-bubble").forEach((li) => {
+function updateBubbleExpiryDisplays() {
+  document.querySelectorAll("#sidebar-bubbles .sidebar-bubble, #home-bubbles .sidebar-bubble").forEach((li) => {
     const id = li.dataset.bubbleId;
     const b = nearbyBubbles.find((x) => x.id === id);
     const span = li.querySelector(".sidebar-bubble-expiry");
@@ -173,7 +173,7 @@ function updateSidebarExpiryDisplays() {
 
 function tickExpiryUi() {
   updateRoomExpiryDisplay();
-  updateSidebarExpiryDisplays();
+  updateBubbleExpiryDisplays();
 }
 
 function startExpiryTicker() {
@@ -245,11 +245,13 @@ function setLocPill(state, title = "") {
   el.title = title || titles[state] || "";
 }
 
-function setSidebarEmpty(text) {
-  const el = $("#sidebar-empty");
-  if (!el) return;
-  el.hidden = !text;
-  el.textContent = text || "";
+function setBrowseEmpty(text) {
+  for (const sel of ["#sidebar-empty", "#home-empty"]) {
+    const el = $(sel);
+    if (!el) continue;
+    el.hidden = !text;
+    el.textContent = text || "";
+  }
 }
 
 function applyPosition(p, { quiet = false } = {}) {
@@ -257,7 +259,7 @@ function applyPosition(p, { quiet = false } = {}) {
   $("#f-lat").value = String(p.lat);
   $("#f-lng").value = String(p.lng);
   setLocPill("ok");
-  if (!quiet) setSidebarEmpty("");
+  if (!quiet) setBrowseEmpty("");
   refreshSidebar();
   startNearbyPolling();
   if (bubbleId) {
@@ -268,7 +270,7 @@ function applyPosition(p, { quiet = false } = {}) {
 function startLocation() {
   if (!isGeolocationContextOk()) {
     setLocPill("error", secureContextHint());
-    setSidebarEmpty(secureContextHint());
+    setBrowseEmpty(secureContextHint());
     return;
   }
 
@@ -284,7 +286,7 @@ function startLocation() {
   }
 
   setLocPill("idle");
-  setSidebarEmpty("Tap + Create to allow location, or ↻ to refresh nearby.");
+  setBrowseEmpty("Tap + Create to allow location, or ↻ to refresh nearby.");
 }
 
 async function ensureLocation({ hint = "Allow location to continue…" } = {}) {
@@ -292,11 +294,11 @@ async function ensureLocation({ hint = "Allow location to continue…" } = {}) {
   if (!isGeolocationContextOk()) {
     const msg = secureContextHint();
     setLocPill("error", msg);
-    setSidebarEmpty(msg);
+    setBrowseEmpty(msg);
     throw new Error(msg);
   }
   setLocPill("loading");
-  setSidebarEmpty(hint);
+    setBrowseEmpty(hint);
   try {
     const p = await requestLocationOnce();
     applyPosition(p);
@@ -308,41 +310,45 @@ async function ensureLocation({ hint = "Allow location to continue…" } = {}) {
     return p;
   } catch (err) {
     setLocPill("error");
-    setSidebarEmpty(formatGeolocationError(err));
+    setBrowseEmpty(formatGeolocationError(err));
     throw err;
   }
 }
 
 /* --- Sidebar --- */
 
-function renderSidebar() {
-  const ul = $("#sidebar-bubbles");
-  if (!ul) return;
-  ul.innerHTML = "";
+function bubbleListItemHtml(b) {
+  const isActive = bubbleId === b.id;
+  const sec = b.expires_at ? remainingSecFromExpiresAt(b.expires_at) : (b.remaining_seconds ?? 0);
+  return `<li class="sidebar-bubble${isActive ? " is-active" : ""}" data-bubble-id="${escapeHtml(b.id)}">
+    <a href="/bubble/${b.id}/" class="sidebar-bubble-link">
+      <span class="sidebar-bubble-title">${escapeHtml(b.title)}</span>
+      <span class="sidebar-bubble-meta">
+        <span class="sidebar-bubble-count">${activeUsers(b)} active</span>
+        <span class="sidebar-bubble-expiry">${fmtRemaining(sec)}</span>
+      </span>
+    </a>
+  </li>`;
+}
+
+function renderBubbleLists() {
+  const lists = [$("#sidebar-bubbles"), $("#home-bubbles")].filter(Boolean);
+  if (!lists.length) return;
 
   if (!nearbyBubbles.length) {
-    setSidebarEmpty(pos ? "No bubbles within 5 km. Create one!" : "Waiting for location…");
+    setBrowseEmpty(pos ? "No bubbles within 5 km. Create one!" : "Waiting for location…");
+    lists.forEach((ul) => {
+      ul.innerHTML = "";
+    });
     return;
   }
-  setSidebarEmpty("");
+  setBrowseEmpty("");
 
-  for (const b of nearbyBubbles) {
-    const li = document.createElement("li");
-    const isActive = bubbleId === b.id;
-    li.className = `sidebar-bubble${isActive ? " is-active" : ""}`;
-    li.dataset.bubbleId = b.id;
-    const sec = b.expires_at ? remainingSecFromExpiresAt(b.expires_at) : (b.remaining_seconds ?? 0);
-    li.innerHTML = `
-      <a href="/bubble/${b.id}/" class="sidebar-bubble-link">
-        <span class="sidebar-bubble-title">${escapeHtml(b.title)}</span>
-        <span class="sidebar-bubble-meta">
-          <span class="sidebar-bubble-count">${activeUsers(b)} active</span>
-          <span class="sidebar-bubble-expiry">${fmtRemaining(sec)}</span>
-        </span>
-      </a>`;
-    ul.appendChild(li);
+  const html = nearbyBubbles.map((b) => bubbleListItemHtml(b)).join("");
+  for (const ul of lists) {
+    ul.innerHTML = html;
   }
-  updateSidebarExpiryDisplays();
+  updateBubbleExpiryDisplays();
 }
 
 async function refreshSidebar() {
@@ -355,14 +361,14 @@ async function refreshSidebar() {
   try {
     const res = await fetch(`/api/bubbles/nearby/?${params}`, { credentials: "include" });
     if (!res.ok) {
-      setSidebarEmpty("Could not load bubbles.");
+      setBrowseEmpty("Could not load bubbles.");
       return;
     }
     const data = await res.json();
     nearbyBubbles = data.results || [];
-    renderSidebar();
+    renderBubbleLists();
   } catch {
-    setSidebarEmpty("Network error loading bubbles.");
+    setBrowseEmpty("Network error loading bubbles.");
   }
 }
 
@@ -428,7 +434,6 @@ function showWelcome() {
   const panel = $("#chat-panel");
   const thread = $("#chat-thread");
   panel?.classList.add("chat-panel--idle");
-  $("#chat-idle-prompt")?.removeAttribute("hidden");
   thread?.setAttribute("hidden", "hidden");
   $("#chat-composer")?.setAttribute("hidden", "hidden");
   clearReply();
@@ -437,7 +442,7 @@ function showWelcome() {
   if (messages) messages.innerHTML = "";
   $("#chat-input")?.setAttribute("disabled", "disabled");
   $("#btn-send")?.setAttribute("disabled", "disabled");
-  $("#bubble-title").textContent = "Pick a bubble";
+  $("#bubble-title").textContent = "Nearby bubbles";
   $("#bubble-expiry").textContent = "";
   bubbleExpiresAtMs = null;
   $("#online-count").textContent = "";
@@ -448,7 +453,6 @@ function showThread() {
   const panel = $("#chat-panel");
   const thread = $("#chat-thread");
   panel?.classList.remove("chat-panel--idle");
-  $("#chat-idle-prompt")?.setAttribute("hidden", "hidden");
   thread?.removeAttribute("hidden");
   $("#chat-composer")?.removeAttribute("hidden");
   $("#chat-input")?.removeAttribute("disabled");
@@ -868,7 +872,7 @@ function setupDrawer() {
     if (e.key === "Escape") setDrawerOpen(false);
   });
 
-  if (window.matchMedia("(max-width: 900px)").matches) {
+  if (bubbleId && window.matchMedia("(max-width: 900px)").matches) {
     sidebar.setAttribute("aria-hidden", "true");
   }
 }
@@ -976,36 +980,49 @@ function setupComposer() {
   });
 }
 
-function setupCreate() {
-  $("#create-form")?.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const title = e.target.title.value.trim();
-    if (!title) return;
+async function submitCreateBubble(e) {
+  e.preventDefault();
+  const title = e.target.title.value.trim();
+  if (!title) return;
 
-    const btn = $("#btn-create");
-    btn.disabled = true;
-    try {
-      if (!pos) {
-        await ensureLocation({ hint: "Allow location to create your bubble…" });
-      }
-      await saveName();
-      const res = await fetch("/api/bubbles/", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, latitude: pos.lat, longitude: pos.lng }),
-      });
-      if (!res.ok) {
-        return;
-      }
-      const b = await res.json();
-      window.location.href = `/bubble/${b.id}/`;
-    } catch {
-      /* location denied or network error — message already in sidebar */
-    } finally {
-      btn.disabled = false;
+  const btn = e.target.querySelector('button[type="submit"]');
+  if (btn) btn.disabled = true;
+  try {
+    if (!pos) {
+      await ensureLocation({ hint: "Allow location to create your bubble…" });
     }
-  });
+    await saveName();
+    const res = await fetch("/api/bubbles/", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, latitude: pos.lat, longitude: pos.lng }),
+    });
+    if (!res.ok) {
+      return;
+    }
+    const b = await res.json();
+    window.location.href = `/bubble/${b.id}/`;
+  } catch {
+    /* location denied or network error — message already in browse panels */
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function setupCreate() {
+  for (const sel of ["#create-form", "#create-form-home"]) {
+    $(sel)?.addEventListener("submit", submitCreateBubble);
+  }
+}
+
+async function refreshNearbyBubbles() {
+  try {
+    if (!pos) await ensureLocation({ hint: "Allow location to see nearby bubbles…" });
+    await refreshSidebar();
+  } catch {
+    /* hint shown in browse panels */
+  }
 }
 
 async function main() {
@@ -1015,14 +1032,8 @@ async function main() {
   setupMessageReplies();
   setupComposer();
   setupCreate();
-  $("#btn-refresh-bubbles")?.addEventListener("click", async () => {
-    try {
-      if (!pos) await ensureLocation({ hint: "Allow location to see nearby bubbles…" });
-      refreshSidebar();
-    } catch {
-      /* hint shown in sidebar */
-    }
-  });
+  $("#btn-refresh-bubbles")?.addEventListener("click", refreshNearbyBubbles);
+  $("#btn-refresh-bubbles-home")?.addEventListener("click", refreshNearbyBubbles);
 
   if (bubbleId) {
     showThread();
@@ -1041,7 +1052,7 @@ async function main() {
     const input = $("#display-name");
     if (input && myName) input.value = myName;
   } catch {
-    if (!pos) setSidebarEmpty("Session error — refresh.");
+    if (!pos) setBrowseEmpty("Session error — refresh.");
   }
 
   window.addEventListener("pagehide", () => {

@@ -4,13 +4,12 @@
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/chat.css' %}" />{% endblock %}
 {% block body_class %}chat-body{% endblock %}
 {% block body %}
-<div class="chat-app" id="chat-app">
+<div class="chat-app {% if bubble_id %}chat-app--room{% else %}chat-app--home{% endif %}" id="chat-app">
   <div class="drawer-backdrop" id="drawer-backdrop" hidden aria-hidden="true"></div>
 
   <aside class="sidebar" id="sidebar" aria-label="Nearby bubbles">
     <div class="sidebar-brand">
       <a href="/" class="brand">Bubblle</a>
-      <span class="loc-pill" id="loc-pill" data-state="idle" title="Location">◎</span>
     </div>
 
     <form id="create-form" class="sidebar-create">
@@ -42,7 +41,8 @@
 
       <div class="topbar-room" id="room-meta">
         <div class="topbar-room-head">
-          <h1 class="room-title" id="bubble-title">Pick a bubble</h1>
+          <h1 class="room-title" id="bubble-title">{% if bubble_id %}Chat{% else %}Bubblle{% endif %}</h1>
+          <span class="loc-pill topbar-loc-pill" id="loc-pill" data-state="idle" title="Location">◎</span>
           <span class="conn-dot" id="conn-dot" data-state="idle" title="Chat connection"></span>
         </div>
         <div class="room-stats">
@@ -66,10 +66,19 @@
     </header>
 
     <div class="chat-panel chat-panel--idle" id="chat-panel">
-      <div class="chat-idle-prompt" id="chat-idle-prompt">
-        <p class="chat-idle-title">Join a bubble to chat</p>
-        <p class="muted">Pick a nearby bubble from the list, or create one to talk with strangers around you.</p>
-      </div>
+      <section class="home-browse" id="home-browse" aria-label="Nearby bubbles">
+        <p class="home-browse-lead muted">Join a bubble near you, or create one to start chatting.</p>
+        <form id="create-form-home" class="home-create">
+          <input name="title" maxlength="120" required placeholder="New bubble title…" />
+          <button type="submit" class="btn btn-accent btn-block" id="btn-create-home">+ Create bubble</button>
+        </form>
+        <div class="home-section-head">
+          <span>Within 5 km</span>
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-refresh-bubbles-home" title="Refresh">↻</button>
+        </div>
+        <ul class="home-bubbles bubble-list" id="home-bubbles"></ul>
+        <p class="home-empty muted" id="home-empty">Getting location…</p>
+      </section>
 
       <div class="chat-thread" id="chat-thread" hidden>
         <div id="chat-status" class="banner banner-warn thread-banner" hidden></div>
