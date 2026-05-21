@@ -7,6 +7,8 @@ from asgiref.sync import sync_to_async
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
+from sessions_app.models import AnonymousSession
+
 from .models import Bubble, Message
 from .membership import membership_join, membership_leave
 from .services import (
@@ -107,14 +109,16 @@ class BubbleConsumer(AsyncJsonWebsocketConsumer):
             ok = await self._within_bubble(float(lat), float(lng))
             if not ok:
                 return
-            key = f"bbl:typing:{self.bubble_id}:{self.user_name}"
+            user_name = await self._current_display_name()
+            session_uuid = self.scope.get("bubblle_session_uuid") or "anon"
+            key = f"bbl:typing:{self.bubble_id}:{session_uuid}"
             if not await sync_to_async(throttle_allow)(key, 3):
                 return
             await self.channel_layer.group_send(
                 self.group_name,
                 {
                     "type": "bubble.typing",
-                    "name": self.user_name,
+                    "name": user_name,
                     "typing": bool(content.get("typing", True)),
                 },
             )
@@ -156,7 +160,8 @@ class BubbleConsumer(AsyncJsonWebsocketConsumer):
                 await self.send_json({"type": "error", "code": "invalid_reply"})
                 return
 
-        msg = await self._persist_message(bubble, self.user_name, text, reply_to_id)
+        user_name = await self._current_display_name()
+        msg = await self._persist_message(bubble, user_name, text, reply_to_id)
         if msg is None:
             await self.send_json({"type": "error", "code": "invalid_reply"})
             return
@@ -191,6 +196,26 @@ class BubbleConsumer(AsyncJsonWebsocketConsumer):
         )
 
     # --- helpers ---
+
+    @database_sync_to_async
+    def _current_display_name(self) -> str:
+        """Read latest display name so renames apply without reconnecting."""
+        raw = self.scope.get("bubblle_session_uuid")
+        if raw:
+            try:
+                uid = uuid.UUID(str(raw))
+            except (ValueError, TypeError):
+                uid = None
+            if uid:
+                name = (
+                    AnonymousSession.objects.filter(session_uuid=uid)
+                    .values_list("anonymous_name", flat=True)
+                    .first()
+                )
+                if name:
+                    self.user_name = name
+                    return name
+        return self.user_name or "Anonymous"
 
     @database_sync_to_async
     def _get_bubble(self, bubble_id: uuid.UUID) -> Bubble | None:
@@ -233,6 +258,4 @@ class BubbleConsumer(AsyncJsonWebsocketConsumer):
             message=text,
             reply_to=parent,
         )
-        if parent:
-            msg.reply_to = parent
-        return msg
+        return Message.objects.select_related("reply_to").get(pk=msg.pk)

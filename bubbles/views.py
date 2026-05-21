@@ -210,8 +210,7 @@ def bubble_messages(request, bubble_id: UUID):
         message=text,
         reply_to=parent,
     )
-    if parent:
-        msg.reply_to = parent
+    msg = Message.objects.select_related("reply_to").get(pk=msg.pk)
 
     from asgiref.sync import async_to_sync
     from channels.layers import get_channel_layer
