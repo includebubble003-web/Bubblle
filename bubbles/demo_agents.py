@@ -17,8 +17,14 @@ import httpx
 import websockets
 from websockets.exceptions import ConnectionClosed
 
+from django.conf import settings as django_settings
+
 from bubbles.demo_content import BUBBLE_TITLES, TOPIC_PROMPTS, USER_POOLS
 from bubbles.models import Bubble
+
+
+def _openai_api_key() -> str:
+    return (getattr(django_settings, "OPENAI_API_KEY", "") or os.environ.get("OPENAI_API_KEY", "")).strip()
 
 
 @dataclass
@@ -71,9 +77,9 @@ class ChatAgent:
     async def generate_reply(self, incoming_text: str, incoming_author: str) -> str:
         from openai import AsyncOpenAI
 
-        api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+        api_key = _openai_api_key()
         if not api_key:
-            raise RuntimeError("OPENAI_API_KEY is not set")
+            raise RuntimeError("OPENAI_API_KEY is not set (add it to .env)")
 
         client = AsyncOpenAI(api_key=api_key)
         context = "\n".join(self.recent[-self.config.history_lines :])
