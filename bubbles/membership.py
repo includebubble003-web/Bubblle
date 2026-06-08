@@ -65,3 +65,16 @@ def membership_clear_many(bubble_ids: list) -> None:
     keys = [_members_key(bid) for bid in bubble_ids]
     if keys:
         r.delete(*keys)
+
+
+def membership_seed_demo(bubble_id: UUID | str, count: int = 10, prefix: str = "demo-seed") -> int:
+    """
+    Seed Redis membership so active_users shows online count for demo bubbles.
+    These are placeholder IDs (not real WebSockets). Cleared when bubble expires.
+    """
+    r = _client()
+    key = _members_key(bubble_id)
+    for i in range(count):
+        r.sadd(key, f"{prefix}:{bubble_id}:{i}")
+    r.expire(key, MEMBERSHIP_TTL_SECONDS)
+    return int(r.scard(key))
