@@ -167,3 +167,5 @@ if _extra_origins.strip():
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini").strip()
 BUBBLLE_BASE_URL = os.environ.get("BUBBLLE_BASE_URL", "http://127.0.0.1:8000").strip().rstrip("/")
+BUBBLLE_AI_BOTS_PER_BUBBLE = int(os.environ.get("BUBBLLE_AI_BOTS_PER_BUBBLE", "2"))
+BUBBLLE_AI_POLL_SECONDS = int(os.environ.get("BUBBLLE_AI_POLL_SECONDS", "30"))

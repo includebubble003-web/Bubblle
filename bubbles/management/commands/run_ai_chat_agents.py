@@ -1,18 +1,11 @@
 """
-Run AI-powered demo users that join bubbles over WebSocket and reply to chat.
+Run AI bots in every joinable bubble (2 per bubble by default).
 
-Requires OPENAI_API_KEY in .env (loaded automatically via Django settings).
+Requires OPENAI_API_KEY in .env.
 
 Usage:
-  # Add to .env: OPENAI_API_KEY=sk-...
-  python manage.py seed_demo_chat --clear
   python manage.py run_ai_chat_agents
-
-  docker compose up -d
   docker compose up ai-agents
-
-  # Custom server URL (if not localhost)
-  python manage.py run_ai_chat_agents --base-url http://127.0.0.1:8000
 """
 from __future__ import annotations
 
@@ -22,17 +15,16 @@ import os
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
-
-from bubbles.demo_agents import AgentConfig, load_demo_bubble_specs, run_all_agents
-from bubbles.demo_content import BUBBLE_TITLES
-from bubbles.membership import membership_clear
 from django.db import close_old_connections
+
+from bubbles.demo_agents import AgentConfig, load_all_joinable_bubble_specs, run_all_agents
+from bubbles.membership import membership_clear
 
 logger = logging.getLogger("bubbles.demo_agents")
 
 
 class Command(BaseCommand):
-    help = "Connect demo personas via WebSocket; AI replies when anyone chats (needs OPENAI_API_KEY)."
+    help = "AI bots join every active bubble (2 per bubble); reply in Hindi when anyone chats."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -46,10 +38,22 @@ class Command(BaseCommand):
             help="OpenAI chat model",
         )
         parser.add_argument(
+            "--bots-per-bubble",
+            type=int,
+            default=settings.BUBBLLE_AI_BOTS_PER_BUBBLE,
+            help="AI personas that join each bubble (default 2)",
+        )
+        parser.add_argument(
             "--max-replies",
             type=int,
             default=2,
-            help="Max AI personas that reply to each new message (default 2)",
+            help="Max bots that reply to each new message (default 2)",
+        )
+        parser.add_argument(
+            "--poll-seconds",
+            type=int,
+            default=settings.BUBBLLE_AI_POLL_SECONDS,
+            help="How often to check for newly created bubbles (default 30)",
         )
 
     def handle(self, *args, **options):
@@ -61,53 +65,45 @@ class Command(BaseCommand):
         if not self._openai_key():
             raise CommandError(
                 "OPENAI_API_KEY is not set inside this container.\n\n"
-                "The .env file is NOT in git — you must add the key on each server:\n"
-                "  cd ~/Bubblle\n"
-                "  nano .env\n"
+                "Add to ~/Bubblle/.env:\n"
                 "  OPENAI_API_KEY=sk-your-key-here\n\n"
-                "Then recreate the service:\n"
-                "  docker compose up -d --force-recreate ai-agents\n\n"
-                "Verify:\n"
-                "  docker compose exec ai-agents printenv OPENAI_API_KEY | head -c 12"
+                "Then: docker compose up -d --force-recreate ai-agents"
             )
 
+        bots_per = max(1, options["bots_per_bubble"])
         config = AgentConfig(
             base_url=options["base_url"].rstrip("/"),
             openai_model=options["model"],
             max_replies_per_message=max(1, options["max_replies"]),
+            bots_per_bubble=bots_per,
+            poll_seconds=max(10, options["poll_seconds"]),
         )
 
-        specs = load_demo_bubble_specs()
+        specs = load_all_joinable_bubble_specs(bots_per)
         if not specs:
             raise CommandError(
-                "No joinable demo bubbles found. Run first:\n"
+                "No joinable bubbles found. Create one in the app or run:\n"
                 "  docker compose exec web python manage.py seed_demo_chat --clear"
             )
 
-        missing = [t for t in BUBBLE_TITLES if t not in {s.title for s in specs}]
-        if missing:
-            raise CommandError(
-                "Some demo bubbles are missing or expired — re-seed:\n"
-                "  docker compose exec web python manage.py seed_demo_chat --clear\n"
-                f"  Missing: {', '.join(missing)}"
-            )
-
-        # Replace fake seed counts with real WebSocket connections
         for spec in specs:
             membership_clear(spec.bubble_id)
 
         close_old_connections()
 
+        total_bots = len(specs) * bots_per
         self.stdout.write(
             self.style.SUCCESS(
-                f"Starting AI agents → {config.base_url} (model={config.openai_model})\n"
-                f"{len(specs)} bubbles, 10 personas each. Ctrl+C to stop.\n"
-                "Open the bubble URLs logged below (must match seeded demo rooms)."
+                f"Starting AI bots → {config.base_url} (model={config.openai_model})\n"
+                f"{len(specs)} bubble(s), {bots_per} bot(s) each = {total_bots} connections.\n"
+                f"New bubbles picked up every {int(config.poll_seconds)}s. Ctrl+C to stop."
             )
         )
         for spec in specs:
-            self.stdout.write(f"  • {spec.title}")
-            self.stdout.write(f"    {config.base_url}/bubble/{spec.bubble_id}/")
+            self.stdout.write(
+                f"  • {spec.title} — {', '.join(spec.personas)}\n"
+                f"    {config.base_url}/bubble/{spec.bubble_id}/"
+            )
         self.stdout.write("")
         try:
             asyncio.run(run_all_agents(config, specs=specs))

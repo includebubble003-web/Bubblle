@@ -1,5 +1,5 @@
 """
-Async AI chat agents: one WebSocket per demo persona, replies via OpenAI.
+Async AI chat agents: WebSocket clients that reply via OpenAI in every joinable bubble.
 
 Requires: OPENAI_API_KEY, httpx, websockets
 """
@@ -20,7 +20,11 @@ from websockets.exceptions import ConnectionClosed
 
 from django.conf import settings as django_settings
 
-from bubbles.demo_content import BUBBLE_TITLES, TOPIC_PROMPTS, USER_POOLS
+from bubbles.demo_content import (
+    BUBBLE_TITLES,
+    pick_personas_for_bubble,
+    topic_for_bubble,
+)
 
 logger = logging.getLogger("bubbles.demo_agents")
 
@@ -60,7 +64,7 @@ def _openai_api_key() -> str:
 
 
 @dataclass
-class DemoBubbleSpec:
+class BubbleAgentSpec:
     """Plain bubble data for async agents (no ORM in async context)."""
 
     bubble_id: str
@@ -71,39 +75,52 @@ class DemoBubbleSpec:
     personas: list[str]
 
 
-def load_demo_bubble_specs() -> list[DemoBubbleSpec]:
-    """Sync only — latest joinable bubble per demo title (skips expired/inactive)."""
+# Backward-compatible alias
+DemoBubbleSpec = BubbleAgentSpec
+
+
+def load_all_joinable_bubble_specs(
+    bots_per_bubble: int | None = None,
+) -> list[BubbleAgentSpec]:
+    """Every active, non-expired bubble — 2 AI personas each by default."""
     from django.utils import timezone
 
     from bubbles.models import Bubble
 
+    if bots_per_bubble is None:
+        bots_per_bubble = int(getattr(django_settings, "BUBBLLE_AI_BOTS_PER_BUBBLE", 2))
+
     now = timezone.now()
-    bubbles = (
-        Bubble.objects.filter(title__in=BUBBLE_TITLES, active=True, expires_at__gt=now)
-        .order_by("-created_at")
-    )
-    by_title: dict[str, DemoBubbleSpec] = {}
-    title_to_idx = {t: i for i, t in enumerate(BUBBLE_TITLES)}
+    bubbles = Bubble.objects.filter(active=True, expires_at__gt=now).order_by("-created_at")
+    specs: list[BubbleAgentSpec] = []
     for b in bubbles:
-        if b.title in by_title:
-            continue
-        idx = title_to_idx.get(b.title)
-        if idx is None:
-            continue
-        by_title[b.title] = DemoBubbleSpec(
-            bubble_id=str(b.id),
-            title=b.title,
-            lat=b.latitude,
-            lng=b.longitude,
-            topic=TOPIC_PROMPTS[idx],
-            personas=list(USER_POOLS[idx]),
+        bid = str(b.id)
+        specs.append(
+            BubbleAgentSpec(
+                bubble_id=bid,
+                title=b.title,
+                lat=b.latitude,
+                lng=b.longitude,
+                topic=topic_for_bubble(b.title),
+                personas=pick_personas_for_bubble(bid, bots_per_bubble),
+            )
         )
+    return specs
+
+
+def load_demo_bubble_specs(bots_per_bubble: int | None = None) -> list[BubbleAgentSpec]:
+    """Latest joinable bubble per demo title only (for seed validation)."""
+    all_specs = load_all_joinable_bubble_specs(bots_per_bubble)
+    by_title: dict[str, BubbleAgentSpec] = {}
+    for spec in all_specs:
+        if spec.title in BUBBLE_TITLES and spec.title not in by_title:
+            by_title[spec.title] = spec
     return [by_title[t] for t in BUBBLE_TITLES if t in by_title]
 
 
-def get_joinable_spec_for_title(title: str) -> DemoBubbleSpec | None:
-    for spec in load_demo_bubble_specs():
-        if spec.title == title:
+def get_joinable_spec_for_bubble_id(bubble_id: str) -> BubbleAgentSpec | None:
+    for spec in load_all_joinable_bubble_specs():
+        if spec.bubble_id == bubble_id:
             return spec
     return None
 
@@ -115,6 +132,8 @@ class AgentConfig:
     reply_delay_min: float = 1.5
     reply_delay_max: float = 4.0
     max_replies_per_message: int = 2
+    bots_per_bubble: int = 2
+    poll_seconds: float = 30.0
     history_lines: int = 12
     verbose: bool = True
 
@@ -127,12 +146,6 @@ def pick_repliers(pool: list["ChatAgent"], author: str, msg_id: str | None, max_
     key = str(msg_id or author)
     ranked = sorted(eligible, key=lambda a: hash(f"{key}:{a.name}"))
     return ranked[:max_n]
-
-
-@dataclass
-class BubbleAgents:
-    spec: DemoBubbleSpec
-    agents: list["ChatAgent"] = field(default_factory=list)
 
 
 @dataclass
@@ -168,8 +181,6 @@ class ChatAgent:
         r.raise_for_status()
         session_uuid = (r.json() or {}).get("session_uuid") or session_uuid
 
-        # Use UUID from API body — httpx may skip Secure cookies over http://web:8000
-        # and the old jar fallback could send Django sessionid instead of bbl_anon.
         if not session_uuid:
             jar_val = client.cookies.get(cookie_name)
             if jar_val:
@@ -184,30 +195,22 @@ class ChatAgent:
             logger.info("%s session ok (%s…)", self.name, str(session_uuid)[:8])
 
     async def _refresh_bubble_spec(self) -> bool:
-        """Reload latest joinable bubble for this title (after expiry or re-seed)."""
+        """Reload bubble if still joinable (after expiry)."""
         from asgiref.sync import sync_to_async
         from django.db import close_old_connections
 
         @sync_to_async
-        def _load() -> DemoBubbleSpec | None:
+        def _load() -> BubbleAgentSpec | None:
             close_old_connections()
-            return get_joinable_spec_for_title(self.bubble_title)
+            return get_joinable_spec_for_bubble_id(self.bubble_id)
 
         spec = await _load()
         if not spec:
             return False
-        if spec.bubble_id != self.bubble_id and self.config.verbose:
-            logger.info(
-                "%s bubble updated %s → %s (%s)",
-                self.name,
-                self.bubble_id[:8],
-                spec.bubble_id[:8],
-                self.bubble_title[:30],
-            )
-        self.bubble_id = spec.bubble_id
         self.lat = spec.lat
         self.lng = spec.lng
         self.topic = spec.topic
+        self.bubble_title = spec.title
         return True
 
     async def generate_reply(self, incoming_text: str, incoming_author: str) -> str:
@@ -220,15 +223,17 @@ class ChatAgent:
         client = AsyncOpenAI(api_key=api_key)
         context = "\n".join(self.recent[-self.config.history_lines :])
         system = (
-            f"You are '{self.name}' in a casual Indian group chat about {self.topic}. "
-            "Reply in 1-2 short sentences. Mix Hindi and English (Hinglish) naturally. "
-            "Sound like a real person on WhatsApp — friendly, opinions, occasional emoji. "
-            "No hashtags, no 'As an AI', no bullet lists."
+            f"Tu '{self.name}' hai — ek normal Indian insaan jo WhatsApp ya local group chat mein baat kar raha/rahi hai. "
+            f"Topic / group: {self.topic}. "
+            "Sirf Hindi mein jawab de (Devanagari script). 1-2 chhote, natural vakya. "
+            "Bilkul real lagna chahiye — casual, kabhi emoji, apni rai, thoda slang theek hai. "
+            "Kabhi mat likh: AI, assistant, language model, main madad kar sakta hoon. "
+            "English sirf common words (ok, nice) agar zaroori ho. No bullet lists, no formal tone."
         )
         user = (
             f"Recent chat:\n{context}\n\n"
-            f"{incoming_author} just said: {incoming_text}\n\n"
-            f"Write your reply as {self.name}:"
+            f"{incoming_author} ne abhi likha: {incoming_text}\n\n"
+            f"Apna reply likh ({self.name}):"
         )
         resp = await client.chat.completions.create(
             model=self.config.openai_model,
@@ -237,7 +242,7 @@ class ChatAgent:
                 {"role": "user", "content": user},
             ],
             max_tokens=120,
-            temperature=0.9,
+            temperature=0.95,
         )
         text = (resp.choices[0].message.content or "").strip()
         return text[:500]
@@ -263,9 +268,9 @@ class ChatAgent:
                 if not await self._refresh_bubble_spec():
                     if self.config.verbose:
                         logger.warning(
-                            "%s no joinable bubble for %r — re-seed demo chat",
+                            "%s bubble %s expired or gone",
                             self.name,
-                            self.bubble_title,
+                            self.bubble_id[:8],
                         )
             try:
                 async with websockets.connect(
@@ -314,6 +319,10 @@ class ChatAgent:
         if not text:
             return
 
+        pool_names = {a.name for a in pool}
+        if author in pool_names:
+            return
+
         line = f"{author}: {text}"
         for agent in pool:
             agent.recent.append(line)
@@ -349,52 +358,85 @@ class ChatAgent:
                 logger.error("%s send failed: %s", self.name, exc)
 
 
-def load_demo_bubbles() -> list[DemoBubbleSpec]:
+def load_demo_bubbles() -> list[BubbleAgentSpec]:
     """Alias for management commands."""
     return load_demo_bubble_specs()
 
 
+async def _start_bubble_agents(
+    spec: BubbleAgentSpec,
+    config: AgentConfig,
+    started: set[str],
+    tasks: list[asyncio.Task],
+) -> None:
+    if spec.bubble_id in started:
+        return
+    started.add(spec.bubble_id)
+
+    if config.verbose:
+        logger.info(
+            "Bubble: %s → %s/bubble/%s/ (%s)",
+            spec.title[:40],
+            config.base_url,
+            spec.bubble_id,
+            ", ".join(spec.personas),
+        )
+
+    pool: list[ChatAgent] = []
+    for name in spec.personas:
+        agent = ChatAgent(
+            bubble_id=spec.bubble_id,
+            bubble_title=spec.title,
+            name=name,
+            topic=spec.topic,
+            lat=spec.lat,
+            lng=spec.lng,
+            config=config,
+        )
+        async with httpx.AsyncClient(
+            base_url=config.base_url,
+            timeout=30.0,
+            headers=_internal_http_headers(config.base_url),
+        ) as client:
+            await agent.bootstrap_session(client)
+        pool.append(agent)
+        await asyncio.sleep(0.1)
+
+    for agent in pool:
+        tasks.append(asyncio.create_task(agent.run(pool)))
+
+
 async def run_all_agents(
     config: AgentConfig | None = None,
-    specs: list[DemoBubbleSpec] | None = None,
+    specs: list[BubbleAgentSpec] | None = None,
 ) -> None:
     config = config or AgentConfig()
-    demo = specs if specs is not None else []
-    if not demo:
-        raise RuntimeError("No demo bubbles found. Run: python manage.py seed_demo_chat")
+    started: set[str] = set()
+    tasks: list[asyncio.Task] = []
 
-    all_tasks: list[asyncio.Task] = []
+    from asgiref.sync import sync_to_async
 
-    for spec in demo:
-        if config.verbose:
-            logger.info(
-                "Listening: %s → %s/bubble/%s/",
-                spec.title,
-                config.base_url,
-                spec.bubble_id,
-            )
+    @sync_to_async
+    def _load_all() -> list[BubbleAgentSpec]:
+        return load_all_joinable_bubble_specs(config.bots_per_bubble)
 
-        pool: list[ChatAgent] = []
-        for name in spec.personas:
-            agent = ChatAgent(
-                bubble_id=spec.bubble_id,
-                bubble_title=spec.title,
-                name=name,
-                topic=spec.topic,
-                lat=spec.lat,
-                lng=spec.lng,
-                config=config,
-            )
-            async with httpx.AsyncClient(
-                base_url=config.base_url,
-                timeout=30.0,
-                headers=_internal_http_headers(config.base_url),
-            ) as client:
-                await agent.bootstrap_session(client)
-            pool.append(agent)
-            await asyncio.sleep(0.15)
+    initial = specs if specs is not None else await _load_all()
+    if not initial:
+        raise RuntimeError("No joinable bubbles found. Create one in the app or run seed_demo_chat.")
 
-        for agent in pool:
-            all_tasks.append(asyncio.create_task(agent.run(pool)))
+    for spec in initial:
+        await _start_bubble_agents(spec, config, started, tasks)
 
-    await asyncio.gather(*all_tasks)
+    async def poll_new_bubbles() -> None:
+        while True:
+            await asyncio.sleep(config.poll_seconds)
+            try:
+                current = await _load_all()
+                for spec in current:
+                    if spec.bubble_id not in started:
+                        await _start_bubble_agents(spec, config, started, tasks)
+            except Exception as exc:
+                logger.error("bubble poll failed: %s", exc)
+
+    tasks.append(asyncio.create_task(poll_new_bubbles()))
+    await asyncio.gather(*tasks)

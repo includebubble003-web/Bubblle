@@ -160,3 +160,43 @@ CONVERSATIONS = [
         (1, "Haan. Lunch rant daily thread chalega."),
     ],
 ]
+
+# Pool for AI bots — 2 picked per bubble (deterministic by bubble id)
+AI_PERSONA_POOL: list[str] = sorted(
+    {name for pool in USER_POOLS for name in pool}
+    | {
+        "Rahul",
+        "Priya",
+        "Arjun",
+        "Neha",
+        "Vikram",
+        "Ananya",
+        "Rohan",
+        "Kavya",
+        "Amit",
+        "Sneha",
+        "Kabir",
+        "Isha",
+        "Nikhil",
+        "Tanvi",
+        "Aditya",
+        "Shreya",
+        "Manish",
+        "Divya",
+        "Karan",
+        "Pooja",
+    }
+)
+
+
+def topic_for_bubble(title: str) -> str:
+    """Topic hint for OpenAI — demo titles get rich prompts, others use title."""
+    if title in BUBBLE_TITLES:
+        return TOPIC_PROMPTS[BUBBLE_TITLES.index(title)]
+    return title
+
+
+def pick_personas_for_bubble(bubble_id: str, count: int = 2) -> list[str]:
+    """Stable pick of `count` names per bubble (same bubble → same bots)."""
+    ranked = sorted(AI_PERSONA_POOL, key=lambda n: hash(f"{bubble_id}:{n}"))
+    return ranked[: max(1, count)]
