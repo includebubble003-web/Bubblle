@@ -26,7 +26,6 @@ from django.core.management.base import BaseCommand, CommandError
 from bubbles.demo_agents import AgentConfig, load_demo_bubble_specs, run_all_agents
 from bubbles.demo_content import BUBBLE_TITLES
 from bubbles.membership import membership_clear
-from bubbles.models import Bubble
 from django.db import close_old_connections
 
 logger = logging.getLogger("bubbles.demo_agents")
@@ -81,25 +80,21 @@ class Command(BaseCommand):
         specs = load_demo_bubble_specs()
         if not specs:
             raise CommandError(
-                "No demo bubbles found. Run first:\n"
-                "  python manage.py seed_demo_chat --clear"
+                "No joinable demo bubbles found. Run first:\n"
+                "  docker compose exec web python manage.py seed_demo_chat --clear"
             )
 
-        expired = [
-            b.title
-            for b in Bubble.objects.filter(title__in=BUBBLE_TITLES, active=True)
-            if not b.is_joinable()
-        ]
-        if expired:
+        missing = [t for t in BUBBLE_TITLES if t not in {s.title for s in specs}]
+        if missing:
             raise CommandError(
-                "Demo bubble(s) expired — re-seed before starting agents:\n"
+                "Some demo bubbles are missing or expired — re-seed:\n"
                 "  docker compose exec web python manage.py seed_demo_chat --clear\n"
-                f"  Expired: {', '.join(expired)}"
+                f"  Missing: {', '.join(missing)}"
             )
 
         # Replace fake seed counts with real WebSocket connections
-        for b in Bubble.objects.filter(title__in=BUBBLE_TITLES, active=True):
-            membership_clear(b.id)
+        for spec in specs:
+            membership_clear(spec.bubble_id)
 
         close_old_connections()
 

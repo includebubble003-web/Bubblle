@@ -61,6 +61,12 @@ class Command(BaseCommand):
             action="store_true",
             help="Skip seeding Redis active user count (default: show 10 online).",
         )
+        parser.add_argument(
+            "--expires-hours",
+            type=float,
+            default=None,
+            help="Bubble lifetime in hours (default: BUBBLLE_DEMO_EXPIRES_SECONDS, usually 24h).",
+        )
 
     def handle(self, *args, **options):
         lat = options["lat"]
@@ -73,7 +79,12 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING(f"Cleared {deleted} existing demo bubble(s)."))
 
         radius = int(getattr(settings, "BUBBLLE_DEFAULT_RADIUS_M", 5000))
-        expires_seconds = int(getattr(settings, "BUBBLLE_DEFAULT_EXPIRES_SECONDS", 23 * 60))
+        if options["expires_hours"] is not None:
+            expires_seconds = int(options["expires_hours"] * 3600)
+        else:
+            expires_seconds = int(
+                getattr(settings, "BUBBLLE_DEMO_EXPIRES_SECONDS", 24 * 60 * 60)
+            )
         expires_at = timezone.now() + timedelta(seconds=expires_seconds)
 
         created_bubbles = []

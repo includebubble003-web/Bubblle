@@ -72,10 +72,16 @@ class DemoBubbleSpec:
 
 
 def load_demo_bubble_specs() -> list[DemoBubbleSpec]:
-    """Sync only — latest active bubble per demo title (avoids stale duplicates)."""
+    """Sync only — latest joinable bubble per demo title (skips expired/inactive)."""
+    from django.utils import timezone
+
     from bubbles.models import Bubble
 
-    bubbles = Bubble.objects.filter(title__in=BUBBLE_TITLES, active=True).order_by("-created_at")
+    now = timezone.now()
+    bubbles = (
+        Bubble.objects.filter(title__in=BUBBLE_TITLES, active=True, expires_at__gt=now)
+        .order_by("-created_at")
+    )
     by_title: dict[str, DemoBubbleSpec] = {}
     title_to_idx = {t: i for i, t in enumerate(BUBBLE_TITLES)}
     for b in bubbles:
@@ -93,6 +99,13 @@ def load_demo_bubble_specs() -> list[DemoBubbleSpec]:
             personas=list(USER_POOLS[idx]),
         )
     return [by_title[t] for t in BUBBLE_TITLES if t in by_title]
+
+
+def get_joinable_spec_for_title(title: str) -> DemoBubbleSpec | None:
+    for spec in load_demo_bubble_specs():
+        if spec.title == title:
+            return spec
+    return None
 
 
 @dataclass
@@ -125,6 +138,7 @@ class BubbleAgents:
 @dataclass
 class ChatAgent:
     bubble_id: str
+    bubble_title: str
     name: str
     topic: str
     lat: float
@@ -168,6 +182,33 @@ class ChatAgent:
         self.cookie = f"{cookie_name}={session_uuid}"
         if self.config.verbose:
             logger.info("%s session ok (%s…)", self.name, str(session_uuid)[:8])
+
+    async def _refresh_bubble_spec(self) -> bool:
+        """Reload latest joinable bubble for this title (after expiry or re-seed)."""
+        from asgiref.sync import sync_to_async
+        from django.db import close_old_connections
+
+        @sync_to_async
+        def _load() -> DemoBubbleSpec | None:
+            close_old_connections()
+            return get_joinable_spec_for_title(self.bubble_title)
+
+        spec = await _load()
+        if not spec:
+            return False
+        if spec.bubble_id != self.bubble_id and self.config.verbose:
+            logger.info(
+                "%s bubble updated %s → %s (%s)",
+                self.name,
+                self.bubble_id[:8],
+                spec.bubble_id[:8],
+                self.bubble_title[:30],
+            )
+        self.bubble_id = spec.bubble_id
+        self.lat = spec.lat
+        self.lng = spec.lng
+        self.topic = spec.topic
+        return True
 
     async def generate_reply(self, incoming_text: str, incoming_author: str) -> str:
         from openai import AsyncOpenAI
@@ -216,7 +257,16 @@ class ChatAgent:
         ws_headers = {"Cookie": self.cookie} if self.cookie else {}
         ws_origin = _internal_ws_origin(self.config.base_url)
         backoff = 3
+        reconnects = 0
         while True:
+            if reconnects:
+                if not await self._refresh_bubble_spec():
+                    if self.config.verbose:
+                        logger.warning(
+                            "%s no joinable bubble for %r — re-seed demo chat",
+                            self.name,
+                            self.bubble_title,
+                        )
             try:
                 async with websockets.connect(
                     self.ws_url(),
@@ -226,6 +276,7 @@ class ChatAgent:
                     ping_timeout=20,
                 ) as ws:
                     backoff = 3
+                    reconnects = 0
                     if self.config.verbose:
                         logger.info("%s WS connected → bubble %s", self.name, self.bubble_id[:8])
                     async for raw in ws:
@@ -235,11 +286,13 @@ class ChatAgent:
                             continue
                         await self._handle_event(ws, pool, data)
             except ConnectionClosed as exc:
+                reconnects += 1
                 if self.config.verbose:
                     logger.warning("%s WS closed: %s", self.name, exc)
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 30)
             except Exception as exc:
+                reconnects += 1
                 if self.config.verbose:
                     logger.error("%s WS error: %s", self.name, exc)
                 await asyncio.sleep(backoff)
@@ -325,6 +378,7 @@ async def run_all_agents(
         for name in spec.personas:
             agent = ChatAgent(
                 bubble_id=spec.bubble_id,
+                bubble_title=spec.title,
                 name=name,
                 topic=spec.topic,
                 lat=spec.lat,
