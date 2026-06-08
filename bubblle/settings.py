@@ -157,3 +157,8 @@ if _extra_origins.strip():
     CSRF_TRUSTED_ORIGINS.extend(
         o.strip() for o in _extra_origins.split(",") if o.strip()
     )
+
+# --- OpenAI (demo AI chat agents; key from .env via load_dotenv above) ---
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini").strip()
+BUBBLLE_BASE_URL = os.environ.get("BUBBLLE_BASE_URL", "http://127.0.0.1:8000").strip().rstrip("/")

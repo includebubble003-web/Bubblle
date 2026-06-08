@@ -1,14 +1,15 @@
 """
 Run AI-powered demo users that join bubbles over WebSocket and reply to chat.
 
-Requires OPENAI_API_KEY in environment.
+Requires OPENAI_API_KEY in .env (loaded automatically via Django settings).
 
 Usage:
-  export OPENAI_API_KEY=sk-...
+  # Add to .env: OPENAI_API_KEY=sk-...
   python manage.py seed_demo_chat --clear
   python manage.py run_ai_chat_agents
 
-  docker compose exec web python manage.py run_ai_chat_agents
+  docker compose up -d
+  docker compose up ai-agents
 
   # Custom server URL (if not localhost)
   python manage.py run_ai_chat_agents --base-url http://127.0.0.1:8000
@@ -16,8 +17,8 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import os
 
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from bubbles.demo_agents import AgentConfig, run_all_agents
@@ -32,12 +33,12 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument(
             "--base-url",
-            default=os.environ.get("BUBBLLE_BASE_URL", "http://127.0.0.1:8000"),
+            default=settings.BUBBLLE_BASE_URL,
             help="App base URL for /api/me/ and WebSocket host",
         )
         parser.add_argument(
             "--model",
-            default=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
+            default=settings.OPENAI_MODEL,
             help="OpenAI chat model",
         )
         parser.add_argument(
@@ -48,9 +49,10 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        if not os.environ.get("OPENAI_API_KEY", "").strip():
+        if not settings.OPENAI_API_KEY:
             raise CommandError(
-                "Set OPENAI_API_KEY first, e.g. export OPENAI_API_KEY=sk-..."
+                "OPENAI_API_KEY missing. Add it to your .env file:\n"
+                "  OPENAI_API_KEY=sk-..."
             )
 
         config = AgentConfig(
