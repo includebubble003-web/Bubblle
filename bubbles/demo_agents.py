@@ -22,6 +22,14 @@ from django.conf import settings as django_settings
 from bubbles.demo_content import BUBBLE_TITLES, TOPIC_PROMPTS, USER_POOLS
 
 
+def _internal_http_headers(base_url: str) -> dict[str, str]:
+    """Docker ai-agents call http://web:8000 — Django must see an allowed Host."""
+    host = urlparse(base_url).hostname or ""
+    if host in ("web", "web.local"):
+        return {"Host": "localhost"}
+    return {}
+
+
 def _openai_api_key() -> str:
     return (
         getattr(django_settings, "OPENAI_API_KEY", "") or os.environ.get("OPENAI_API_KEY", "")
@@ -153,13 +161,17 @@ class ChatAgent:
         await ws.send(json.dumps(payload))
 
     async def run(self, pool: list["ChatAgent"]) -> None:
-        headers = {"Cookie": self.cookie} if self.cookie else {}
+        ws_headers = {"Cookie": self.cookie} if self.cookie else {}
+        internal = _internal_http_headers(self.config.base_url)
+        if internal.get("Host"):
+            ws_headers["Host"] = internal["Host"]
+            ws_headers["Origin"] = "http://localhost"
         backoff = 3
         while True:
             try:
                 async with websockets.connect(
                     self.ws_url(),
-                    additional_headers=headers,
+                    additional_headers=ws_headers,
                     ping_interval=20,
                     ping_timeout=20,
                 ) as ws:
@@ -248,9 +260,14 @@ async def run_all_agents(
                 lng=spec.lng,
                 config=config,
             )
-            async with httpx.AsyncClient(base_url=config.base_url, timeout=30.0) as client:
+            async with httpx.AsyncClient(
+                base_url=config.base_url,
+                timeout=30.0,
+                headers=_internal_http_headers(config.base_url),
+            ) as client:
                 await agent.bootstrap_session(client)
             pool.append(agent)
+            await asyncio.sleep(0.15)
 
         for agent in pool:
             all_tasks.append(asyncio.create_task(agent.run(pool)))
