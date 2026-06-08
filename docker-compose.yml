@@ -91,7 +91,9 @@ services:
       REDIS_URL: redis://redis:6379/0
       BUBBLLE_BASE_URL: http://web:8000
       SESSION_COOKIE_SECURE: "0"
-      # OPENAI_API_KEY / OPENAI_MODEL loaded from env_file (.env)
+      # Required — must exist in ~/Bubblle/.env on the server (.env is not in git)
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Add OPENAI_API_KEY=sk-... to .env in project root}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
     depends_on:
       web:
         condition: service_started

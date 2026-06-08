@@ -6,9 +6,10 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
-
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load project .env (local dev). In Docker, vars come from compose env_file / environment.
+load_dotenv(BASE_DIR / ".env")
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-only-unsafe-key-change-me")
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"

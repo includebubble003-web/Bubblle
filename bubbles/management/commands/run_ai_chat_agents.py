@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
@@ -58,10 +59,17 @@ class Command(BaseCommand):
             format="%(asctime)s %(levelname)s %(message)s",
         )
 
-        if not settings.OPENAI_API_KEY:
+        if not self._openai_key():
             raise CommandError(
-                "OPENAI_API_KEY missing. Add it to your .env file:\n"
-                "  OPENAI_API_KEY=sk-..."
+                "OPENAI_API_KEY is not set inside this container.\n\n"
+                "The .env file is NOT in git — you must add the key on each server:\n"
+                "  cd ~/Bubblle\n"
+                "  nano .env\n"
+                "  OPENAI_API_KEY=sk-your-key-here\n\n"
+                "Then recreate the service:\n"
+                "  docker compose up -d --force-recreate ai-agents\n\n"
+                "Verify:\n"
+                "  docker compose exec ai-agents printenv OPENAI_API_KEY | head -c 12"
             )
 
         config = AgentConfig(
@@ -98,3 +106,7 @@ class Command(BaseCommand):
             asyncio.run(run_all_agents(config, specs=specs))
         except KeyboardInterrupt:
             self.stdout.write(self.style.WARNING("\nStopped AI agents."))
+
+    @staticmethod
+    def _openai_key() -> str:
+        return (os.environ.get("OPENAI_API_KEY") or settings.OPENAI_API_KEY or "").strip()
