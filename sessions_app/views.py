@@ -50,8 +50,8 @@ def _session_from_request(request):
 
 
 @api_view(["GET", "PATCH"])
-@ratelimit(key="ip", rate="60/m", method="GET")
-@ratelimit(key="ip", rate="30/m", method="PATCH")
+@ratelimit(key="ip", rate="300/m", method="GET")
+@ratelimit(key="ip", rate="300/m", method="PATCH")
 def me(request):
     """
     GET: return (and optionally create) the anonymous session; sets `bbl_anon` cookie.
