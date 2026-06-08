@@ -20,11 +20,48 @@ from websockets.exceptions import ConnectionClosed
 from django.conf import settings as django_settings
 
 from bubbles.demo_content import BUBBLE_TITLES, TOPIC_PROMPTS, USER_POOLS
-from bubbles.models import Bubble
 
 
 def _openai_api_key() -> str:
-    return (getattr(django_settings, "OPENAI_API_KEY", "") or os.environ.get("OPENAI_API_KEY", "")).strip()
+    return (
+        getattr(django_settings, "OPENAI_API_KEY", "") or os.environ.get("OPENAI_API_KEY", "")
+    ).strip()
+
+
+@dataclass
+class DemoBubbleSpec:
+    """Plain bubble data for async agents (no ORM in async context)."""
+
+    bubble_id: str
+    lat: float
+    lng: float
+    topic: str
+    personas: list[str]
+
+
+def load_demo_bubble_specs() -> list[DemoBubbleSpec]:
+    """Sync only — call from management command before asyncio.run()."""
+    from bubbles.models import Bubble
+
+    bubbles = list(
+        Bubble.objects.filter(title__in=BUBBLE_TITLES, active=True).order_by("created_at")
+    )
+    out: list[DemoBubbleSpec] = []
+    title_to_idx = {t: i for i, t in enumerate(BUBBLE_TITLES)}
+    for b in bubbles:
+        idx = title_to_idx.get(b.title)
+        if idx is None:
+            continue
+        out.append(
+            DemoBubbleSpec(
+                bubble_id=str(b.id),
+                lat=b.latitude,
+                lng=b.longitude,
+                topic=TOPIC_PROMPTS[idx],
+                personas=list(USER_POOLS[idx]),
+            )
+        )
+    return out
 
 
 @dataclass
@@ -39,9 +76,7 @@ class AgentConfig:
 
 @dataclass
 class BubbleAgents:
-    bubble: Bubble
-    topic: str
-    personas: list[str]
+    spec: DemoBubbleSpec
     agents: list["ChatAgent"] = field(default_factory=list)
 
 
@@ -186,35 +221,31 @@ class ChatAgent:
                 return
 
 
-def load_demo_bubbles() -> list[tuple[Bubble, str, list[str]]]:
-    bubbles = list(Bubble.objects.filter(title__in=BUBBLE_TITLES, active=True).order_by("created_at"))
-    out: list[tuple[Bubble, str, list[str]]] = []
-    title_to_idx = {t: i for i, t in enumerate(BUBBLE_TITLES)}
-    for b in bubbles:
-        idx = title_to_idx.get(b.title)
-        if idx is None:
-            continue
-        out.append((b, TOPIC_PROMPTS[idx], USER_POOLS[idx]))
-    return out
+def load_demo_bubbles() -> list[DemoBubbleSpec]:
+    """Alias for management commands."""
+    return load_demo_bubble_specs()
 
 
-async def run_all_agents(config: AgentConfig | None = None) -> None:
+async def run_all_agents(
+    config: AgentConfig | None = None,
+    specs: list[DemoBubbleSpec] | None = None,
+) -> None:
     config = config or AgentConfig()
-    demo = load_demo_bubbles()
+    demo = specs if specs is not None else []
     if not demo:
         raise RuntimeError("No demo bubbles found. Run: python manage.py seed_demo_chat")
 
     all_tasks: list[asyncio.Task] = []
 
-    for bubble, topic, personas in demo:
+    for spec in demo:
         pool: list[ChatAgent] = []
-        for name in personas:
+        for name in spec.personas:
             agent = ChatAgent(
-                bubble_id=str(bubble.id),
+                bubble_id=spec.bubble_id,
                 name=name,
-                topic=topic,
-                lat=bubble.latitude,
-                lng=bubble.longitude,
+                topic=spec.topic,
+                lat=spec.lat,
+                lng=spec.lng,
                 config=config,
             )
             async with httpx.AsyncClient(base_url=config.base_url, timeout=30.0) as client:
