@@ -17,15 +17,18 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from bubbles.demo_agents import AgentConfig, load_demo_bubble_specs, run_all_agents
+from bubbles.demo_content import BUBBLE_TITLES
 from bubbles.membership import membership_clear
 from bubbles.models import Bubble
-from bubbles.demo_content import BUBBLE_TITLES
 from django.db import close_old_connections
+
+logger = logging.getLogger("bubbles.demo_agents")
 
 
 class Command(BaseCommand):
@@ -50,6 +53,11 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s %(levelname)s %(message)s",
+        )
+
         if not settings.OPENAI_API_KEY:
             raise CommandError(
                 "OPENAI_API_KEY missing. Add it to your .env file:\n"
@@ -78,9 +86,14 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"Starting AI agents → {config.base_url} (model={config.openai_model})\n"
-                f"{len(specs)} bubbles, 10 personas each. Ctrl+C to stop."
+                f"{len(specs)} bubbles, 10 personas each. Ctrl+C to stop.\n"
+                "Open the bubble URLs logged below (must match seeded demo rooms)."
             )
         )
+        for spec in specs:
+            self.stdout.write(f"  • {spec.title}")
+            self.stdout.write(f"    {config.base_url}/bubble/{spec.bubble_id}/")
+        self.stdout.write("")
         try:
             asyncio.run(run_all_agents(config, specs=specs))
         except KeyboardInterrupt:

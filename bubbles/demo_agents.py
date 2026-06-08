@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import random
 from dataclasses import dataclass, field
@@ -20,6 +21,8 @@ from websockets.exceptions import ConnectionClosed
 from django.conf import settings as django_settings
 
 from bubbles.demo_content import BUBBLE_TITLES, TOPIC_PROMPTS, USER_POOLS
+
+logger = logging.getLogger("bubbles.demo_agents")
 
 
 def _internal_http_headers(base_url: str) -> dict[str, str]:
@@ -41,6 +44,7 @@ class DemoBubbleSpec:
     """Plain bubble data for async agents (no ORM in async context)."""
 
     bubble_id: str
+    title: str
     lat: float
     lng: float
     topic: str
@@ -48,28 +52,27 @@ class DemoBubbleSpec:
 
 
 def load_demo_bubble_specs() -> list[DemoBubbleSpec]:
-    """Sync only — call from management command before asyncio.run()."""
+    """Sync only — latest active bubble per demo title (avoids stale duplicates)."""
     from bubbles.models import Bubble
 
-    bubbles = list(
-        Bubble.objects.filter(title__in=BUBBLE_TITLES, active=True).order_by("created_at")
-    )
-    out: list[DemoBubbleSpec] = []
+    bubbles = Bubble.objects.filter(title__in=BUBBLE_TITLES, active=True).order_by("-created_at")
+    by_title: dict[str, DemoBubbleSpec] = {}
     title_to_idx = {t: i for i, t in enumerate(BUBBLE_TITLES)}
     for b in bubbles:
+        if b.title in by_title:
+            continue
         idx = title_to_idx.get(b.title)
         if idx is None:
             continue
-        out.append(
-            DemoBubbleSpec(
-                bubble_id=str(b.id),
-                lat=b.latitude,
-                lng=b.longitude,
-                topic=TOPIC_PROMPTS[idx],
-                personas=list(USER_POOLS[idx]),
-            )
+        by_title[b.title] = DemoBubbleSpec(
+            bubble_id=str(b.id),
+            title=b.title,
+            lat=b.latitude,
+            lng=b.longitude,
+            topic=TOPIC_PROMPTS[idx],
+            personas=list(USER_POOLS[idx]),
         )
-    return out
+    return [by_title[t] for t in BUBBLE_TITLES if t in by_title]
 
 
 @dataclass
@@ -80,6 +83,17 @@ class AgentConfig:
     reply_delay_max: float = 4.0
     max_replies_per_message: int = 2
     history_lines: int = 12
+    verbose: bool = True
+
+
+def pick_repliers(pool: list["ChatAgent"], author: str, msg_id: str | None, max_n: int) -> list["ChatAgent"]:
+    """Same agents chosen for every listener in the pool (deterministic)."""
+    eligible = [a for a in pool if a.name != author]
+    if not eligible:
+        return []
+    key = str(msg_id or author)
+    ranked = sorted(eligible, key=lambda a: hash(f"{key}:{a.name}"))
+    return ranked[:max_n]
 
 
 @dataclass
@@ -114,8 +128,19 @@ class ChatAgent:
         r.raise_for_status()
         r = await client.patch("/api/me/", json={"anonymous_name": self.name})
         r.raise_for_status()
-        parts = [f"{k}={v}" for k, v in client.cookies.items()]
+        parts = []
+        cookie_name = getattr(django_settings, "BUBBLLE_SESSION_COOKIE_NAME", "bbl_anon")
+        jar_val = client.cookies.get(cookie_name)
+        if jar_val:
+            parts.append(f"{cookie_name}={jar_val}")
+        else:
+            for k, v in client.cookies.items():
+                parts.append(f"{k}={v}")
         self.cookie = "; ".join(parts)
+        if not self.cookie:
+            raise RuntimeError(f"{self.name}: session cookie missing after /api/me/")
+        if self.config.verbose:
+            logger.info("%s session ok (cookie set)", self.name)
 
     async def generate_reply(self, incoming_text: str, incoming_author: str) -> str:
         from openai import AsyncOpenAI
@@ -176,22 +201,32 @@ class ChatAgent:
                     ping_timeout=20,
                 ) as ws:
                     backoff = 3
+                    if self.config.verbose:
+                        logger.info("%s WS connected → bubble %s", self.name, self.bubble_id[:8])
                     async for raw in ws:
                         try:
                             data = json.loads(raw)
                         except json.JSONDecodeError:
                             continue
                         await self._handle_event(ws, pool, data)
-            except ConnectionClosed:
+            except ConnectionClosed as exc:
+                if self.config.verbose:
+                    logger.warning("%s WS closed: %s", self.name, exc)
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 30)
-            except Exception:
+            except Exception as exc:
+                if self.config.verbose:
+                    logger.error("%s WS error: %s", self.name, exc)
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 30)
 
     async def _handle_event(
         self, ws, pool: list["ChatAgent"], data: dict[str, Any]
     ) -> None:
+        if data.get("type") == "error":
+            if self.config.verbose:
+                logger.warning("%s server error: %s", self.name, data.get("code"))
+            return
         if data.get("type") != "chat":
             return
         payload = data.get("payload") or {}
@@ -210,12 +245,12 @@ class ChatAgent:
         if author == self.name:
             return
 
-        # Only some agents reply per message to avoid 10x spam
-        eligible = [a for a in pool if a.name != author]
-        random.shuffle(eligible)
-        pick = eligible[: self.config.max_replies_per_message]
+        pick = pick_repliers(pool, author, msg_id, self.config.max_replies_per_message)
         if self not in pick:
             return
+
+        if self.config.verbose:
+            logger.info("%s replying to %s: %s", self.name, author, text[:60])
 
         async with self._reply_lock:
             await asyncio.sleep(
@@ -223,14 +258,17 @@ class ChatAgent:
             )
             try:
                 reply = await self.generate_reply(text, author)
-            except Exception:
+            except Exception as exc:
+                logger.error("%s OpenAI failed: %s", self.name, exc)
                 return
             if not reply:
                 return
             try:
                 await self.send_chat(ws, reply, reply_to=msg_id)
-            except Exception:
-                return
+                if self.config.verbose:
+                    logger.info("%s sent: %s", self.name, reply[:80])
+            except Exception as exc:
+                logger.error("%s send failed: %s", self.name, exc)
 
 
 def load_demo_bubbles() -> list[DemoBubbleSpec]:
@@ -250,6 +288,14 @@ async def run_all_agents(
     all_tasks: list[asyncio.Task] = []
 
     for spec in demo:
+        if config.verbose:
+            logger.info(
+                "Listening: %s → %s/bubble/%s/",
+                spec.title,
+                config.base_url,
+                spec.bubble_id,
+            )
+
         pool: list[ChatAgent] = []
         for name in spec.personas:
             agent = ChatAgent(
