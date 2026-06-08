@@ -144,23 +144,30 @@ class ChatAgent:
         )
 
     async def bootstrap_session(self, client: httpx.AsyncClient) -> None:
+        cookie_name = getattr(django_settings, "BUBBLLE_SESSION_COOKIE_NAME", "bbl_anon")
+
         r = await client.get("/api/me/")
         r.raise_for_status()
+        session_uuid = (r.json() or {}).get("session_uuid")
+
         r = await client.patch("/api/me/", json={"anonymous_name": self.name})
         r.raise_for_status()
-        parts = []
-        cookie_name = getattr(django_settings, "BUBBLLE_SESSION_COOKIE_NAME", "bbl_anon")
-        jar_val = client.cookies.get(cookie_name)
-        if jar_val:
-            parts.append(f"{cookie_name}={jar_val}")
-        else:
-            for k, v in client.cookies.items():
-                parts.append(f"{k}={v}")
-        self.cookie = "; ".join(parts)
-        if not self.cookie:
-            raise RuntimeError(f"{self.name}: session cookie missing after /api/me/")
+        session_uuid = (r.json() or {}).get("session_uuid") or session_uuid
+
+        # Use UUID from API body — httpx may skip Secure cookies over http://web:8000
+        # and the old jar fallback could send Django sessionid instead of bbl_anon.
+        if not session_uuid:
+            jar_val = client.cookies.get(cookie_name)
+            if jar_val:
+                session_uuid = jar_val
+            else:
+                raise RuntimeError(
+                    f"{self.name}: no session_uuid from /api/me/ (check web SESSION_COOKIE_SECURE)"
+                )
+
+        self.cookie = f"{cookie_name}={session_uuid}"
         if self.config.verbose:
-            logger.info("%s session ok (cookie set)", self.name)
+            logger.info("%s session ok (%s…)", self.name, str(session_uuid)[:8])
 
     async def generate_reply(self, incoming_text: str, incoming_author: str) -> str:
         from openai import AsyncOpenAI

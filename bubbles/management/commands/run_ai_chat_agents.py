@@ -85,6 +85,18 @@ class Command(BaseCommand):
                 "  python manage.py seed_demo_chat --clear"
             )
 
+        expired = [
+            b.title
+            for b in Bubble.objects.filter(title__in=BUBBLE_TITLES, active=True)
+            if not b.is_joinable()
+        ]
+        if expired:
+            raise CommandError(
+                "Demo bubble(s) expired — re-seed before starting agents:\n"
+                "  docker compose exec web python manage.py seed_demo_chat --clear\n"
+                f"  Expired: {', '.join(expired)}"
+            )
+
         # Replace fake seed counts with real WebSocket connections
         for b in Bubble.objects.filter(title__in=BUBBLE_TITLES, active=True):
             membership_clear(b.id)

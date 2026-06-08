@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from urllib.parse import parse_qs
 
@@ -18,6 +19,8 @@ from .services import (
     serialize_message,
     throttle_allow,
 )
+
+logger = logging.getLogger("bubbles.consumers")
 
 
 def _parse_float(qs: dict, key: str) -> float | None:
@@ -42,6 +45,9 @@ class BubbleConsumer(AsyncJsonWebsocketConsumer):
         self.group_name: str | None = None
         self.user_name = self.scope.get("bubblle_anonymous_name")
         if not self.user_name:
+            logger.warning(
+                "WS rejected: no anonymous session (check bbl_anon cookie on upgrade request)"
+            )
             await self.close(code=4401)
             return
 
@@ -62,11 +68,21 @@ class BubbleConsumer(AsyncJsonWebsocketConsumer):
 
         bubble = await self._get_bubble(self.bubble_id)
         if not bubble or not bubble.is_joinable():
+            logger.warning(
+                "WS rejected: bubble %s missing or not joinable (expired?)",
+                self.bubble_id,
+            )
             await self.close(code=4404)
             return
 
         dist = haversine_distance_m(lat, lng, bubble.latitude, bubble.longitude)
         if dist > bubble.radius:
+            logger.warning(
+                "WS rejected: bubble %s out of range (dist=%.0fm, radius=%dm)",
+                self.bubble_id,
+                dist,
+                bubble.radius,
+            )
             await self.close(code=4403)
             return
 
