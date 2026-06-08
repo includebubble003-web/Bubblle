@@ -25,12 +25,32 @@ from bubbles.demo_content import BUBBLE_TITLES, TOPIC_PROMPTS, USER_POOLS
 logger = logging.getLogger("bubbles.demo_agents")
 
 
-def _internal_http_headers(base_url: str) -> dict[str, str]:
-    """Docker ai-agents call http://web:8000 — Django must see an allowed Host."""
+def _docker_internal_host(base_url: str) -> str | None:
+    """Compose service name when ai-agents talk to the web container."""
     host = urlparse(base_url).hostname or ""
     if host in ("web", "web.local"):
-        return {"Host": "localhost"}
+        return host
+    return None
+
+
+def _internal_http_headers(base_url: str) -> dict[str, str]:
+    """Docker ai-agents call http://web:8000 — Host must be in ALLOWED_HOSTS (web, not localhost)."""
+    internal = _docker_internal_host(base_url)
+    if internal:
+        return {"Host": internal}
     return {}
+
+
+def _internal_ws_origin(base_url: str) -> str | None:
+    """Origin header for Channels AllowedHostsOriginValidator (must match ALLOWED_HOSTS)."""
+    parsed = urlparse(base_url)
+    internal = _docker_internal_host(base_url)
+    if not internal:
+        return None
+    port = parsed.port
+    if port and port not in (80, 443):
+        return f"http://{internal}:{port}"
+    return f"http://{internal}"
 
 
 def _openai_api_key() -> str:
@@ -187,15 +207,13 @@ class ChatAgent:
 
     async def run(self, pool: list["ChatAgent"]) -> None:
         ws_headers = {"Cookie": self.cookie} if self.cookie else {}
-        internal = _internal_http_headers(self.config.base_url)
-        if internal.get("Host"):
-            ws_headers["Host"] = internal["Host"]
-            ws_headers["Origin"] = "http://localhost"
+        ws_origin = _internal_ws_origin(self.config.base_url)
         backoff = 3
         while True:
             try:
                 async with websockets.connect(
                     self.ws_url(),
+                    origin=ws_origin,
                     additional_headers=ws_headers,
                     ping_interval=20,
                     ping_timeout=20,
