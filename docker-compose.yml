@@ -43,8 +43,7 @@ services:
       POSTGRES_PORT: "5432"
       REDIS_URL: redis://redis:6379/0
       SESSION_COOKIE_SECURE: "0"
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      # OPENAI_* come from env_file (.env) — do not override with empty ${OPENAI_API_KEY:-}
     ports:
       - "8000:8000"
     depends_on:
@@ -90,10 +89,9 @@ services:
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
       REDIS_URL: redis://redis:6379/0
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       BUBBLLE_BASE_URL: http://web:8000
       SESSION_COOKIE_SECURE: "0"
+      # OPENAI_API_KEY / OPENAI_MODEL loaded from env_file (.env)
     depends_on:
       web:
         condition: service_started
