@@ -131,8 +131,8 @@ class AgentConfig:
     openai_model: str = "gpt-4o-mini"
     reply_delay_min: float = 1.5
     reply_delay_max: float = 4.0
-    max_replies_per_message: int = 2
-    bots_per_bubble: int = 2
+    max_replies_per_message: int = 1
+    bots_per_bubble: int = 1
     poll_seconds: float = 30.0
     history_lines: int = 12
     verbose: bool = True

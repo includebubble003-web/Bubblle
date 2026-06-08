@@ -41,13 +41,13 @@ class Command(BaseCommand):
             "--bots-per-bubble",
             type=int,
             default=settings.BUBBLLE_AI_BOTS_PER_BUBBLE,
-            help="AI personas that join each bubble (default 2)",
+            help="AI personas that join each bubble (default 1)",
         )
         parser.add_argument(
             "--max-replies",
             type=int,
-            default=2,
-            help="Max bots that reply to each new message (default 2)",
+            default=1,
+            help="Max bots that reply to each new message (default 1)",
         )
         parser.add_argument(
             "--poll-seconds",
