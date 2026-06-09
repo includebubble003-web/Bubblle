@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 from uuid import UUID
 
+from django.conf import settings
 from django.utils import timezone
 from django_ratelimit.decorators import ratelimit
 from rest_framework import status
@@ -229,7 +230,7 @@ def bubble_messages(request, bubble_id: UUID):
 @api_view(["POST"])
 @ratelimit(key="ip", rate="30/m", method="POST")
 def bubble_message_image(request, bubble_id: UUID):
-    """Upload a photo (gallery or camera); optimized to WebP server-side."""
+    """Upload a photo (gallery or camera); optimized to JPEG server-side."""
     session = _anonymous_session_for_request(request)
     if not session:
         return Response({"detail": "Missing anonymous session cookie."}, status=status.HTTP_401_UNAUTHORIZED)
@@ -265,6 +266,8 @@ def bubble_message_image(request, bubble_id: UUID):
         optimized, width, height = optimize_chat_image(ser.validated_data["image"])
     except ValueError as e:
         return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    settings.MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
 
     msg = Message(
         bubble=bubble,

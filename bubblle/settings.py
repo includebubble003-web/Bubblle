@@ -97,10 +97,16 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
-# Chat image uploads — resized to WebP server-side
+# Chat image uploads — resized to JPEG server-side
 BUBBLLE_IMAGE_MAX_BYTES = int(os.environ.get("BUBBLLE_IMAGE_MAX_BYTES", str(5 * 1024 * 1024)))
 BUBBLLE_IMAGE_MAX_DIMENSION = int(os.environ.get("BUBBLLE_IMAGE_MAX_DIMENSION", "1280"))
-BUBBLLE_IMAGE_WEBP_QUALITY = int(os.environ.get("BUBBLLE_IMAGE_WEBP_QUALITY", "80"))
+BUBBLLE_IMAGE_JPEG_QUALITY = int(os.environ.get("BUBBLLE_IMAGE_JPEG_QUALITY", "82"))
+BUBBLLE_IMAGE_WEBP_QUALITY = int(os.environ.get("BUBBLLE_IMAGE_WEBP_QUALITY", "80"))  # legacy alias
+
+# Public site URL for absolute media links (WebSocket + REST). e.g. https://bubblle.me
+BUBBLLE_PUBLIC_BASE_URL = (
+    os.environ.get("BUBBLLE_PUBLIC_BASE_URL", os.environ.get("BUBBLLE_BASE_URL", "")).strip().rstrip("/")
+)
 
 # In DEBUG, serve from app static dirs without running collectstatic; in prod, use STATIC_ROOT (Docker build).
 WHITENOISE_USE_FINDERS = DEBUG
@@ -159,6 +165,11 @@ SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "0") == "1"
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 365  # 1 year
+
+# Trust X-Forwarded-Proto from nginx / ALB so absolute URLs use https in production.
+USE_X_FORWARDED_HOST = True
+if SESSION_COOKIE_SECURE or not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 CSRF_TRUSTED_ORIGINS = []
 for host in ALLOWED_HOSTS:

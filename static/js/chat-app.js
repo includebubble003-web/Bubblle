@@ -54,6 +54,18 @@ function escapeHtml(s) {
     .replaceAll('"', "&quot;");
 }
 
+function mediaUrl(url) {
+  if (!url) return "";
+  const raw = String(url).trim();
+  if (/^https?:\/\//i.test(raw)) {
+    if (location.protocol === "https:" && raw.startsWith("http://")) {
+      return raw.replace(/^http:\/\//i, "https://");
+    }
+    return raw;
+  }
+  return `${location.origin}${raw.startsWith("/") ? "" : "/"}${raw}`;
+}
+
 function truncateText(s, max = 80) {
   const t = String(s || "").trim();
   if (t.length <= max) return t;
@@ -560,10 +572,11 @@ function scrollMessages() {
 
 function messageBodyHtml(m) {
   let html = "";
-  if (m.image_url) {
+  const imageUrl = mediaUrl(m.image_url);
+  if (imageUrl) {
     const alt = m.message ? escapeHtml(truncateText(m.message, 80)) : "Shared photo";
-    html += `<a class="msg-image-link" href="${escapeHtml(m.image_url)}" target="_blank" rel="noopener noreferrer">
-      <img class="msg-image" src="${escapeHtml(m.image_url)}" alt="${alt}" loading="lazy" decoding="async" />
+    html += `<a class="msg-image-link" href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener noreferrer">
+      <img class="msg-image" src="${escapeHtml(imageUrl)}" alt="${alt}" loading="lazy" decoding="async" />
     </a>`;
   }
   if (m.message) {
@@ -575,11 +588,12 @@ function messageBodyHtml(m) {
 function appendMessage(m, opts = { scroll: true }) {
   if (m?.id && messageById.has(String(m.id))) return;
   clearMessagesPlaceholder();
-  rememberMessage(m);
+  const imageUrl = mediaUrl(m.image_url);
+  rememberMessage({ ...m, image_url: imageUrl || m.image_url || null });
   const list = $("#messages");
   const mine = isMyMessage(m.anonymous_name);
   const row = document.createElement("div");
-  row.className = `msg-bubble${mine ? " msg-bubble-mine" : ""}${m.image_url ? " msg-bubble-has-image" : ""}`;
+  row.className = `msg-bubble${mine ? " msg-bubble-mine" : ""}${imageUrl ? " msg-bubble-has-image" : ""}`;
   row.dataset.messageId = String(m.id);
   row.setAttribute("role", "button");
   row.setAttribute("tabindex", "0");
@@ -827,7 +841,7 @@ async function uploadChatImage(file) {
     lastSentReply = replySnapshot;
     clearReply();
     if ($("#chat-input")) $("#chat-input").value = "";
-    if (!isWsOpen()) appendMessage(msg);
+    appendMessage(msg);
     setComposerHint("");
   } catch (err) {
     setComposerHint(err.message || "Could not upload photo.", { kind: "cooldown" });

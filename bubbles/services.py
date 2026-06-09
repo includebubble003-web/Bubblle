@@ -6,6 +6,7 @@ from __future__ import annotations
 import math
 from uuid import UUID
 
+from django.conf import settings
 from django.utils import timezone
 
 from .membership import membership_count
@@ -45,6 +46,24 @@ def active_user_count(bubble_id: UUID | str) -> int:
     return membership_count(bubble_id)
 
 
+def public_media_url(relative_url: str | None) -> str | None:
+    """Turn /media/... into an absolute URL for clients (WebSocket + REST)."""
+    if not relative_url:
+        return None
+    if relative_url.startswith(("http://", "https://")):
+        return relative_url
+    base = getattr(settings, "BUBBLLE_PUBLIC_BASE_URL", "").rstrip("/")
+    if not base:
+        return relative_url
+    return f"{base}{relative_url}" if relative_url.startswith("/") else f"{base}/{relative_url}"
+
+
+def message_image_url(msg: Message) -> str | None:
+    if not msg.image or not msg.image.name:
+        return None
+    return public_media_url(msg.image.url)
+
+
 def get_reply_parent(bubble_id: UUID, reply_to_id: UUID | None) -> Message | None:
     """Resolve a reply target; must belong to the same bubble."""
     if not reply_to_id:
@@ -60,8 +79,9 @@ def serialize_message(msg: Message) -> dict:
         "message": msg.message or "",
         "created_at": msg.created_at.isoformat(),
     }
-    if msg.image:
-        payload["image_url"] = msg.image.url
+    image_url = message_image_url(msg)
+    if image_url:
+        payload["image_url"] = image_url
         if msg.image_width:
             payload["image_width"] = msg.image_width
         if msg.image_height:
@@ -75,7 +95,7 @@ def serialize_message(msg: Message) -> dict:
             "id": str(parent.id),
             "anonymous_name": parent.anonymous_name,
             "message": reply_preview,
-            "image_url": parent.image.url if parent.image else None,
+            "image_url": message_image_url(parent),
         }
     return payload
 

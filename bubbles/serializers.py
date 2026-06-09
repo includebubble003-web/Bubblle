@@ -5,6 +5,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from .models import Bubble, Message
+from .services import message_image_url
 
 
 class BubbleCreateSerializer(serializers.ModelSerializer):
@@ -68,13 +69,7 @@ class MessageOutSerializer(serializers.ModelSerializer):
         )
 
     def get_image_url(self, obj: Message) -> str | None:
-        if not obj.image:
-            return None
-        request = self.context.get("request")
-        url = obj.image.url
-        if request is not None:
-            return request.build_absolute_uri(url)
-        return url
+        return message_image_url(obj)
 
     def get_reply_to(self, obj: Message):
         parent = getattr(obj, "reply_to", None)
@@ -88,10 +83,7 @@ class MessageOutSerializer(serializers.ModelSerializer):
             "anonymous_name": parent.anonymous_name,
             "message": preview,
         }
-        if parent.image:
-            request = self.context.get("request")
-            url = parent.image.url
-            if request is not None:
-                url = request.build_absolute_uri(url)
-            out["image_url"] = url
+        reply_image_url = message_image_url(parent)
+        if reply_image_url:
+            out["image_url"] = reply_image_url
         return out
