@@ -1,5 +1,5 @@
 """
-Run AI bots in every joinable bubble (2 per bubble by default).
+Run AI bots in every joinable bubble (1 per bubble by default).
 
 Requires OPENAI_API_KEY in .env.
 
@@ -24,7 +24,7 @@ logger = logging.getLogger("bubbles.demo_agents")
 
 
 class Command(BaseCommand):
-    help = "AI bots join every active bubble (2 per bubble); reply in Hindi when anyone chats."
+    help = "AI bots join every active bubble (1 per bubble); reply in Hindi when anyone chats."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -71,12 +71,16 @@ class Command(BaseCommand):
             )
 
         bots_per = max(1, options["bots_per_bubble"])
+        max_replies = min(max(1, options["max_replies"]), bots_per)
         config = AgentConfig(
             base_url=options["base_url"].rstrip("/"),
             openai_model=options["model"],
-            max_replies_per_message=max(1, options["max_replies"]),
+            max_replies_per_message=max_replies,
             bots_per_bubble=bots_per,
             poll_seconds=max(10, options["poll_seconds"]),
+            reply_delay_min=float(settings.BUBBLLE_AI_REPLY_DELAY_MIN),
+            reply_delay_max=float(settings.BUBBLLE_AI_REPLY_DELAY_MAX),
+            reply_min_gap=float(settings.BUBBLLE_AI_REPLY_MIN_GAP),
         )
 
         specs = load_all_joinable_bubble_specs(bots_per)

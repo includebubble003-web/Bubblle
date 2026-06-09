@@ -1,7 +1,7 @@
 """Shared demo bubble titles, personas, and AI topic hints."""
 
-DEFAULT_LAT = 19.0760
-DEFAULT_LNG = 72.8777
+DEFAULT_LAT = 20.96
+DEFAULT_LNG = 77.768
 
 BUBBLE_TITLES = [
     "Best chai & coffee in town ☕",

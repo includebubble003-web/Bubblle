@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import random
+import time
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlparse
@@ -82,13 +83,13 @@ DemoBubbleSpec = BubbleAgentSpec
 def load_all_joinable_bubble_specs(
     bots_per_bubble: int | None = None,
 ) -> list[BubbleAgentSpec]:
-    """Every active, non-expired bubble — 2 AI personas each by default."""
+    """Every active, non-expired bubble — one AI persona each by default."""
     from django.utils import timezone
 
     from bubbles.models import Bubble
 
     if bots_per_bubble is None:
-        bots_per_bubble = int(getattr(django_settings, "BUBBLLE_AI_BOTS_PER_BUBBLE", 2))
+        bots_per_bubble = int(getattr(django_settings, "BUBBLLE_AI_BOTS_PER_BUBBLE", 1))
 
     now = timezone.now()
     bubbles = Bubble.objects.filter(active=True, expires_at__gt=now).order_by("-created_at")
@@ -129,13 +130,48 @@ def get_joinable_spec_for_bubble_id(bubble_id: str) -> BubbleAgentSpec | None:
 class AgentConfig:
     base_url: str = "http://127.0.0.1:8000"
     openai_model: str = "gpt-4o-mini"
-    reply_delay_min: float = 1.5
-    reply_delay_max: float = 4.0
+    reply_delay_min: float = 60.0
+    reply_delay_max: float = 90.0
+    reply_min_gap: float = 60.0
     max_replies_per_message: int = 1
     bots_per_bubble: int = 1
     poll_seconds: float = 30.0
     history_lines: int = 12
     verbose: bool = True
+
+
+@dataclass
+class BubbleReplyGate:
+    """One reply per message; minimum gap between any two bot replies in a bubble."""
+
+    min_gap_seconds: float = 60.0
+    _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    _claimed_messages: set[str] = field(default_factory=set)
+    _last_reply_at: float = 0.0
+
+    async def try_claim(self, msg_id: str | None) -> bool:
+        """Only one bot may reply to a given message id."""
+        async with self._lock:
+            if msg_id:
+                key = str(msg_id)
+                if key in self._claimed_messages:
+                    return False
+                self._claimed_messages.add(key)
+                if len(self._claimed_messages) > 500:
+                    self._claimed_messages.clear()
+            return True
+
+    async def extra_wait_seconds(self) -> float:
+        """Seconds to wait so bot replies are at least min_gap apart."""
+        async with self._lock:
+            if not self._last_reply_at:
+                return 0.0
+            elapsed = time.monotonic() - self._last_reply_at
+            return max(0.0, self.min_gap_seconds - elapsed)
+
+    async def mark_replied(self) -> None:
+        async with self._lock:
+            self._last_reply_at = time.monotonic()
 
 
 def pick_repliers(pool: list["ChatAgent"], author: str, msg_id: str | None, max_n: int) -> list["ChatAgent"]:
@@ -160,6 +196,8 @@ class ChatAgent:
     cookie: str = ""
     recent: list[str] = field(default_factory=list)
     _reply_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    _pool_gate: BubbleReplyGate | None = None
+    _personality: str = ""
 
     def ws_url(self) -> str:
         parsed = urlparse(self.config.base_url)
@@ -213,6 +251,20 @@ class ChatAgent:
         self.bubble_title = spec.title
         return True
 
+    def _personality_hint(self) -> str:
+        if self._personality:
+            return self._personality
+        styles = [
+            "thoda funny aur mazedaar",
+            "seedha aur short",
+            "thoda emotional / supportive",
+            "practical aur logical",
+            "filmy references kabhi kabhi",
+            "chill aur laid-back",
+        ]
+        self._personality = styles[hash(self.name) % len(styles)]
+        return self._personality
+
     async def generate_reply(self, incoming_text: str, incoming_author: str) -> str:
         from openai import AsyncOpenAI
 
@@ -223,10 +275,12 @@ class ChatAgent:
         client = AsyncOpenAI(api_key=api_key)
         context = "\n".join(self.recent[-self.config.history_lines :])
         system = (
-            f"Tu '{self.name}' hai — ek normal Indian insaan jo WhatsApp ya local group chat mein baat kar raha/rahi hai. "
+            f"Tu '{self.name}' hai — ek wulgar desi Indian insaan jo WhatsApp ya local group chat mein baat kar raha/rahi hai. "
             f"Topic / group: {self.topic}. "
+            f"Tera alag style: {self._personality_hint()}. "
             "Sirf Hindi mein jawab de (Devanagari script). 1-2 chhote, natural vakya. "
             "Bilkul real lagna chahiye — casual, kabhi emoji, apni rai, thoda slang theek hai. "
+            "Dusre bots jaisa mat likh — apna unique angle de. "
             "Kabhi mat likh: AI, assistant, language model, main madad kar sakta hoon. "
             "English sirf common words (ok, nice) agar zaroori ho. No bullet lists, no formal tone."
         )
@@ -336,13 +390,27 @@ class ChatAgent:
         if self not in pick:
             return
 
+        gate = self._pool_gate
+        if gate and not await gate.try_claim(msg_id):
+            return
+
+        reply_index = pick.index(self)
+        base_wait = random.uniform(self.config.reply_delay_min, self.config.reply_delay_max)
+        stagger = reply_index * self.config.reply_min_gap
+        gap_wait = await gate.extra_wait_seconds() if gate else 0.0
+        total_wait = base_wait + stagger + gap_wait
+
         if self.config.verbose:
-            logger.info("%s replying to %s: %s", self.name, author, text[:60])
+            logger.info(
+                "%s will reply to %s in %.0fs: %s",
+                self.name,
+                author,
+                total_wait,
+                text[:60],
+            )
 
         async with self._reply_lock:
-            await asyncio.sleep(
-                random.uniform(self.config.reply_delay_min, self.config.reply_delay_max)
-            )
+            await asyncio.sleep(total_wait)
             try:
                 reply = await self.generate_reply(text, author)
             except Exception as exc:
@@ -352,6 +420,8 @@ class ChatAgent:
                 return
             try:
                 await self.send_chat(ws, reply, reply_to=msg_id)
+                if gate:
+                    await gate.mark_replied()
                 if self.config.verbose:
                     logger.info("%s sent: %s", self.name, reply[:80])
             except Exception as exc:
@@ -383,6 +453,7 @@ async def _start_bubble_agents(
         )
 
     pool: list[ChatAgent] = []
+    gate = BubbleReplyGate(min_gap_seconds=config.reply_min_gap)
     for name in spec.personas:
         agent = ChatAgent(
             bubble_id=spec.bubble_id,
@@ -392,6 +463,7 @@ async def _start_bubble_agents(
             lat=spec.lat,
             lng=spec.lng,
             config=config,
+            _pool_gate=gate,
         )
         async with httpx.AsyncClient(
             base_url=config.base_url,
