@@ -85,10 +85,14 @@ function replyPreviewText(reply) {
 function replyQuoteHtml(reply) {
   if (!reply?.anonymous_name) return "";
   const preview = replyPreviewText(reply);
-  if (!preview) return "";
+  const thumb = mediaUrl(reply?.image_url);
+  if (!preview && !thumb) return "";
   return `<div class="msg-reply-quote">
-    <span class="msg-reply-author">${escapeHtml(reply.anonymous_name)}</span>
-    <span class="msg-reply-text">${escapeHtml(preview)}</span>
+    ${thumb ? `<img class="msg-reply-thumb" src="${escapeHtml(thumb)}" alt="" loading="lazy" decoding="async" />` : ""}
+    <div class="msg-reply-body">
+      <span class="msg-reply-author">${escapeHtml(reply.anonymous_name)}</span>
+      <span class="msg-reply-text">${escapeHtml(preview || "Photo")}</span>
+    </div>
   </div>`;
 }
 
@@ -291,6 +295,7 @@ function applyPosition(p, { quiet = false } = {}) {
   startNearbyPolling();
   if (bubbleId) {
     onEnterBubble();
+    refreshComposerAvailability();
   }
 }
 
@@ -484,9 +489,17 @@ function showThread() {
   thread?.removeAttribute("hidden");
   $("#chat-composer")?.removeAttribute("hidden");
   $("#chat-input")?.removeAttribute("disabled");
-  if (!isSendOnCooldown()) {
-    $("#btn-send")?.removeAttribute("disabled");
-    setMediaButtonsEnabled(true);
+  refreshComposerAvailability();
+}
+
+function refreshComposerAvailability() {
+  const ready = !!pos && bubbleActive && !isSendOnCooldown();
+  setSendEnabled(ready);
+  if (isSendOnCooldown()) return;
+  if (!pos && bubbleId && bubbleActive) {
+    setComposerHint("Waiting for location to send messages…", { kind: "info" });
+  } else if (bubbleActive) {
+    setComposerHint("");
   }
 }
 
@@ -542,8 +555,7 @@ function refreshCooldownUi() {
   if (!isSendOnCooldown()) {
     if (sendCooldownTick) clearInterval(sendCooldownTick);
     sendCooldownTick = null;
-    setSendEnabled(true);
-    setComposerHint("");
+    refreshComposerAvailability();
     return;
   }
   const sec = Math.max(1, Math.ceil((sendCooldownUntil - Date.now()) / 1000));
@@ -574,15 +586,40 @@ function messageBodyHtml(m) {
   let html = "";
   const imageUrl = mediaUrl(m.image_url);
   if (imageUrl) {
-    const alt = m.message ? escapeHtml(truncateText(m.message, 80)) : "Shared photo";
+    const alt = m.message ? escapeHtml(truncateText(m.message, 80)) : "Photo";
+    const pendingClass = m._pending ? " msg-image-pending" : "";
     html += `<a class="msg-image-link" href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener noreferrer">
-      <img class="msg-image" src="${escapeHtml(imageUrl)}" alt="${alt}" loading="lazy" decoding="async" />
+      <img class="msg-image${pendingClass}" src="${escapeHtml(imageUrl)}" alt="${alt}" loading="eager" decoding="async" />
     </a>`;
   }
   if (m.message) {
     html += `<p class="msg-text">${escapeHtml(m.message)}</p>`;
   }
   return html;
+}
+
+function removeMessageById(id) {
+  if (!id) return;
+  messageById.delete(String(id));
+  document.querySelector(`[data-message-id="${id}"]`)?.remove();
+}
+
+function wireMessageImage(img) {
+  if (!img || img.dataset.wired) return;
+  img.dataset.wired = "1";
+  img.addEventListener("error", () => {
+    if (img.dataset.retried) {
+      img.classList.add("msg-image-broken");
+      return;
+    }
+    img.dataset.retried = "1";
+    const src = img.getAttribute("src");
+    if (!src) return;
+    const normalized = mediaUrl(src);
+    if (normalized && normalized !== src) {
+      img.src = normalized;
+    }
+  });
 }
 
 function appendMessage(m, opts = { scroll: true }) {
@@ -610,6 +647,7 @@ function appendMessage(m, opts = { scroll: true }) {
       <span class="msg-time">${t}</span>
     </div>`;
   list.appendChild(row);
+  wireMessageImage(row.querySelector(".msg-image"));
   row.style.animation = "msg-in 0.28s ease-out";
   if (opts.scroll) scrollMessages();
 }
@@ -766,15 +804,28 @@ function connectWs() {
   };
 }
 
+function isImageFile(file) {
+  if (!file) return false;
+  if (file.type?.startsWith("image/")) return true;
+  return /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/i.test(file.name || "");
+}
+
 async function compressImageFile(file) {
-  if (!file?.type?.startsWith("image/")) {
+  if (!isImageFile(file)) {
     throw new Error("Please choose a photo.");
   }
   if (file.size > MAX_IMAGE_INPUT_BYTES) {
     throw new Error("Photo is too large (max 8 MB).");
   }
 
-  const bitmap = await createImageBitmap(file);
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    // iOS HEIC / older browsers: upload original and let the server optimize.
+    return file;
+  }
+
   const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(bitmap.width, bitmap.height));
   const width = Math.max(1, Math.round(bitmap.width * scale));
   const height = Math.max(1, Math.round(bitmap.height * scale));
@@ -782,7 +833,10 @@ async function compressImageFile(file) {
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Could not process photo.");
+  if (!ctx) {
+    bitmap.close();
+    return file;
+  }
   ctx.drawImage(bitmap, 0, 0, width, height);
   bitmap.close();
 
@@ -797,7 +851,15 @@ async function compressImageFile(file) {
 }
 
 async function uploadChatImage(file) {
-  if (!bubbleId || !pos || !bubbleActive) return;
+  if (!bubbleId) return;
+  if (!bubbleActive) {
+    setComposerHint("This bubble has ended.", { kind: "cooldown" });
+    return;
+  }
+  if (!pos) {
+    setComposerHint("Allow location to send photos, then try again.", { kind: "cooldown" });
+    return;
+  }
   if (isSendOnCooldown()) {
     refreshCooldownUi();
     return;
@@ -805,14 +867,29 @@ async function uploadChatImage(file) {
 
   const replySnapshot = pendingReply ? { ...pendingReply } : null;
   const caption = $("#chat-input")?.value.trim() || "";
+  let pendingId = null;
+  let localPreview = null;
 
   setMediaButtonsEnabled(false);
-  setComposerHint("Uploading photo…", { kind: "info" });
+  setComposerHint("Preparing photo…", { kind: "info" });
 
   try {
     const blob = await compressImageFile(file);
+    const uploadName = blob.name || file.name || "photo.jpg";
+    localPreview = URL.createObjectURL(blob);
+    pendingId = `pending-${Date.now()}`;
+    appendMessage({
+      id: pendingId,
+      anonymous_name: myName || "You",
+      message: caption,
+      image_url: localPreview,
+      created_at: new Date().toISOString(),
+      _pending: true,
+    });
+    setComposerHint("Uploading photo…", { kind: "info" });
+
     const fd = new FormData();
-    fd.append("image", blob, "photo.jpg");
+    fd.append("image", blob, uploadName);
     fd.append("latitude", String(pos.lat));
     fd.append("longitude", String(pos.lng));
     if (caption) fd.append("message", caption);
@@ -823,6 +900,9 @@ async function uploadChatImage(file) {
       credentials: "include",
       body: fd,
     });
+
+    removeMessageById(pendingId);
+    pendingId = null;
 
     if (!res.ok) {
       let detail = "Could not upload photo.";
@@ -837,17 +917,40 @@ async function uploadChatImage(file) {
     }
 
     const msg = await res.json();
+    if (!msg.image_url) {
+      setComposerHint("Photo uploaded but preview is unavailable.", { kind: "cooldown" });
+    } else {
+      setComposerHint("");
+    }
     startSendCooldown();
     lastSentReply = replySnapshot;
     clearReply();
     if ($("#chat-input")) $("#chat-input").value = "";
     appendMessage(msg);
-    setComposerHint("");
   } catch (err) {
+    removeMessageById(pendingId);
     setComposerHint(err.message || "Could not upload photo.", { kind: "cooldown" });
   } finally {
-    if (!isSendOnCooldown()) setMediaButtonsEnabled(true);
+    if (localPreview) URL.revokeObjectURL(localPreview);
+    refreshComposerAvailability();
   }
+}
+
+function openMediaPicker(inputEl) {
+  if (!bubbleId) return;
+  if (!bubbleActive) {
+    setComposerHint("This bubble has ended.", { kind: "cooldown" });
+    return;
+  }
+  if (!pos) {
+    setComposerHint("Allow location to send photos, then try again.", { kind: "cooldown" });
+    return;
+  }
+  if (isSendOnCooldown()) {
+    refreshCooldownUi();
+    return;
+  }
+  inputEl?.click();
 }
 
 function setupMediaUpload() {
@@ -855,13 +958,11 @@ function setupMediaUpload() {
   const cameraInput = $("#image-camera-input");
 
   $("#btn-image-gallery")?.addEventListener("click", () => {
-    if (!bubbleActive || !pos) return;
-    galleryInput?.click();
+    openMediaPicker(galleryInput);
   });
 
   $("#btn-image-camera")?.addEventListener("click", () => {
-    if (!bubbleActive || !pos) return;
-    cameraInput?.click();
+    openMediaPicker(cameraInput);
   });
 
   const onPick = async (e) => {

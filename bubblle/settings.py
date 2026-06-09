@@ -103,10 +103,9 @@ BUBBLLE_IMAGE_MAX_DIMENSION = int(os.environ.get("BUBBLLE_IMAGE_MAX_DIMENSION", 
 BUBBLLE_IMAGE_JPEG_QUALITY = int(os.environ.get("BUBBLLE_IMAGE_JPEG_QUALITY", "82"))
 BUBBLLE_IMAGE_WEBP_QUALITY = int(os.environ.get("BUBBLLE_IMAGE_WEBP_QUALITY", "80"))  # legacy alias
 
-# Public site URL for absolute media links (WebSocket + REST). e.g. https://bubblle.me
-BUBBLLE_PUBLIC_BASE_URL = (
-    os.environ.get("BUBBLLE_PUBLIC_BASE_URL", os.environ.get("BUBBLLE_BASE_URL", "")).strip().rstrip("/")
-)
+# Public site URL for absolute image links (optional). e.g. https://bubblle.me
+# Leave empty to use same-origin relative URLs (recommended).
+BUBBLLE_PUBLIC_BASE_URL = os.environ.get("BUBBLLE_PUBLIC_BASE_URL", "").strip().rstrip("/")
 
 # In DEBUG, serve from app static dirs without running collectstatic; in prod, use STATIC_ROOT (Docker build).
 WHITENOISE_USE_FINDERS = DEBUG

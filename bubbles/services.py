@@ -58,10 +58,15 @@ def public_media_url(relative_url: str | None) -> str | None:
     return f"{base}{relative_url}" if relative_url.startswith("/") else f"{base}/{relative_url}"
 
 
-def message_image_url(msg: Message) -> str | None:
+def message_image_api_path(msg: Message) -> str | None:
+    """Stable API path for chat photos (served by Django, not /media/ static)."""
     if not msg.image or not msg.image.name:
         return None
-    return public_media_url(msg.image.url)
+    return f"/api/bubbles/messages/{msg.id}/image/"
+
+
+def message_image_url(msg: Message) -> str | None:
+    return public_media_url(message_image_api_path(msg))
 
 
 def get_reply_parent(bubble_id: UUID, reply_to_id: UUID | None) -> Message | None:

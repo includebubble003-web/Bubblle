@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import mimetypes
 from datetime import timedelta
 from uuid import UUID
 
 from django.conf import settings
+from django.http import FileResponse
 from django.utils import timezone
 from django_ratelimit.decorators import ratelimit
 from rest_framework import status
@@ -225,6 +227,29 @@ def bubble_messages(request, bubble_id: UUID):
         MessageOutSerializer(msg, context={"request": request}).data,
         status=status.HTTP_201_CREATED,
     )
+
+
+@api_view(["GET"])
+@ratelimit(key="ip", rate="240/m", method="GET")
+def message_image_file(request, message_id: UUID):
+    """Serve a chat photo through the API (reliable behind Docker/nginx)."""
+    try:
+        msg = Message.objects.get(id=message_id)
+    except Message.DoesNotExist:
+        return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if not msg.image or not msg.image.name:
+        return Response({"detail": "No image."}, status=status.HTTP_404_NOT_FOUND)
+
+    content_type, _ = mimetypes.guess_type(msg.image.name)
+    try:
+        img_file = msg.image.open("rb")
+    except OSError:
+        return Response({"detail": "Image file missing."}, status=status.HTTP_404_NOT_FOUND)
+
+    response = FileResponse(img_file, content_type=content_type or "image/jpeg")
+    response["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
 
 
 @api_view(["POST"])

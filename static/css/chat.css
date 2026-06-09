@@ -599,11 +599,26 @@
 .msg-image {
   display: block;
   width: 100%;
+  min-height: 120px;
   height: auto;
   max-height: 320px;
   object-fit: cover;
   border-radius: 12px;
   background: #0b1018;
+}
+
+.msg-image-pending {
+  opacity: 0.72;
+  filter: saturate(0.85);
+}
+
+.msg-image-broken {
+  min-height: 120px;
+  object-fit: contain;
+  padding: 24px;
+  background:
+    linear-gradient(135deg, rgba(94, 234, 212, 0.08), rgba(124, 156, 255, 0.08)),
+    #0b1018;
 }
 
 .msg-bubble-mine .msg-image-link {
@@ -619,13 +634,29 @@
 }
 
 .msg-reply-quote {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 6px;
   padding: 6px 8px 6px 10px;
   border-left: 3px solid #5eead4;
   border-radius: 8px;
   background: rgba(0, 0, 0, 0.2);
   overflow: hidden;
+}
+
+.msg-reply-thumb {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #0b1018;
+}
+
+.msg-reply-body {
+  min-width: 0;
+  flex: 1;
 }
 
 .msg-bubble-mine .msg-reply-quote {
