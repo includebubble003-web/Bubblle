@@ -41,7 +41,10 @@ class Message(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     bubble = models.ForeignKey(Bubble, on_delete=models.CASCADE, related_name="messages")
     anonymous_name = models.CharField(max_length=64)
-    message = models.TextField()
+    message = models.TextField(blank=True, default="")
+    image = models.ImageField(upload_to="chat/%Y/%m/%d/", blank=True, null=True)
+    image_width = models.PositiveIntegerField(null=True, blank=True)
+    image_height = models.PositiveIntegerField(null=True, blank=True)
     reply_to = models.ForeignKey(
         "self",
         null=True,

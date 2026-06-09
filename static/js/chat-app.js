@@ -17,6 +17,9 @@ const NEARBY_POLL_MS = 5000;
 const WS_RECONNECT_BASE_MS = 3000;
 const WS_RECONNECT_MAX_MS = 20000;
 const MSG_COOLDOWN_MS = 1000;
+const MAX_IMAGE_INPUT_BYTES = 8 * 1024 * 1024;
+const MAX_IMAGE_DIMENSION = 1600;
+const IMAGE_JPEG_QUALITY = 0.85;
 
 const bubbleId = (window.__BUBBLE_ID__ || "").trim() || null;
 
@@ -61,11 +64,19 @@ function rememberMessage(m) {
   if (m?.id) messageById.set(String(m.id), m);
 }
 
+function replyPreviewText(reply) {
+  if (reply?.message) return truncateText(reply.message);
+  if (reply?.image_url) return "📷 Photo";
+  return "";
+}
+
 function replyQuoteHtml(reply) {
   if (!reply?.anonymous_name) return "";
+  const preview = replyPreviewText(reply);
+  if (!preview) return "";
   return `<div class="msg-reply-quote">
     <span class="msg-reply-author">${escapeHtml(reply.anonymous_name)}</span>
-    <span class="msg-reply-text">${escapeHtml(truncateText(reply.message))}</span>
+    <span class="msg-reply-text">${escapeHtml(preview)}</span>
   </div>`;
 }
 
@@ -80,14 +91,17 @@ function messageFromRow(row) {
 
   const authorEl = row.querySelector(".msg-author");
   const textEl = row.querySelector(".msg-text");
+  const imgEl = row.querySelector(".msg-image");
   const author = authorEl?.textContent?.trim() || (row.classList.contains("msg-bubble-mine") ? myName : "");
   const text = textEl?.textContent || "";
-  if (!author && !text) return null;
+  const imageUrl = imgEl?.getAttribute("src") || null;
+  if (!author && !text && !imageUrl) return null;
 
   return {
     id: row.dataset.messageId,
     anonymous_name: author || "Unknown",
     message: text,
+    image_url: imageUrl,
   };
 }
 
@@ -97,13 +111,14 @@ function setReplyTarget(m) {
     id: String(m.id),
     anonymous_name: m.anonymous_name,
     message: m.message,
+    image_url: m.image_url || null,
   };
   const bar = $("#reply-compose");
   const label = $("#reply-compose-label");
   const preview = $("#reply-compose-preview");
   const input = $("#chat-input");
   if (label) label.textContent = `Reply to ${m.anonymous_name}`;
-  if (preview) preview.textContent = truncateText(m.message, 100);
+  if (preview) preview.textContent = replyPreviewText(m) || "Message";
   bar?.removeAttribute("hidden");
   setComposerHint("");
   scrollComposerIntoView();
@@ -442,6 +457,7 @@ function showWelcome() {
   if (messages) messages.innerHTML = "";
   $("#chat-input")?.setAttribute("disabled", "disabled");
   $("#btn-send")?.setAttribute("disabled", "disabled");
+  setMediaButtonsEnabled(false);
   $("#bubble-title").textContent = "Nearby bubbles";
   $("#bubble-expiry").textContent = "";
   bubbleExpiresAtMs = null;
@@ -456,7 +472,10 @@ function showThread() {
   thread?.removeAttribute("hidden");
   $("#chat-composer")?.removeAttribute("hidden");
   $("#chat-input")?.removeAttribute("disabled");
-  if (!isSendOnCooldown()) $("#btn-send")?.removeAttribute("disabled");
+  if (!isSendOnCooldown()) {
+    $("#btn-send")?.removeAttribute("disabled");
+    setMediaButtonsEnabled(true);
+  }
 }
 
 function setConnDot(state, title = "") {
@@ -477,9 +496,18 @@ function isSendOnCooldown() {
   return Date.now() < sendCooldownUntil;
 }
 
+function setMediaButtonsEnabled(on) {
+  for (const id of ["#btn-image-gallery", "#btn-image-camera"]) {
+    const btn = $(id);
+    if (!btn) continue;
+    btn.disabled = !on;
+  }
+}
+
 function setSendEnabled(on) {
   const btn = $("#btn-send");
   if (btn) btn.disabled = !on;
+  setMediaButtonsEnabled(on);
 }
 
 function setComposerHint(msg, { kind = "muted" } = {}) {
@@ -530,13 +558,28 @@ function scrollMessages() {
   });
 }
 
+function messageBodyHtml(m) {
+  let html = "";
+  if (m.image_url) {
+    const alt = m.message ? escapeHtml(truncateText(m.message, 80)) : "Shared photo";
+    html += `<a class="msg-image-link" href="${escapeHtml(m.image_url)}" target="_blank" rel="noopener noreferrer">
+      <img class="msg-image" src="${escapeHtml(m.image_url)}" alt="${alt}" loading="lazy" decoding="async" />
+    </a>`;
+  }
+  if (m.message) {
+    html += `<p class="msg-text">${escapeHtml(m.message)}</p>`;
+  }
+  return html;
+}
+
 function appendMessage(m, opts = { scroll: true }) {
+  if (m?.id && messageById.has(String(m.id))) return;
   clearMessagesPlaceholder();
   rememberMessage(m);
   const list = $("#messages");
   const mine = isMyMessage(m.anonymous_name);
   const row = document.createElement("div");
-  row.className = `msg-bubble${mine ? " msg-bubble-mine" : ""}`;
+  row.className = `msg-bubble${mine ? " msg-bubble-mine" : ""}${m.image_url ? " msg-bubble-has-image" : ""}`;
   row.dataset.messageId = String(m.id);
   row.setAttribute("role", "button");
   row.setAttribute("tabindex", "0");
@@ -549,7 +592,7 @@ function appendMessage(m, opts = { scroll: true }) {
         ${mine ? "" : `<span class="msg-author">${escapeHtml(m.anonymous_name)}</span>`}
         <button type="button" class="msg-reply-btn" aria-label="Reply to this message">Reply</button>
       </div>
-      <p class="msg-text">${escapeHtml(m.message)}</p>
+      ${messageBodyHtml(m)}
       <span class="msg-time">${t}</span>
     </div>`;
   list.appendChild(row);
@@ -707,6 +750,115 @@ function connectWs() {
       }
     }
   };
+}
+
+async function compressImageFile(file) {
+  if (!file?.type?.startsWith("image/")) {
+    throw new Error("Please choose a photo.");
+  }
+  if (file.size > MAX_IMAGE_INPUT_BYTES) {
+    throw new Error("Photo is too large (max 8 MB).");
+  }
+
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(bitmap.width, bitmap.height));
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not process photo.");
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close();
+
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("Could not compress photo."))),
+      "image/jpeg",
+      IMAGE_JPEG_QUALITY
+    );
+  });
+  return blob;
+}
+
+async function uploadChatImage(file) {
+  if (!bubbleId || !pos || !bubbleActive) return;
+  if (isSendOnCooldown()) {
+    refreshCooldownUi();
+    return;
+  }
+
+  const replySnapshot = pendingReply ? { ...pendingReply } : null;
+  const caption = $("#chat-input")?.value.trim() || "";
+
+  setMediaButtonsEnabled(false);
+  setComposerHint("Uploading photo…", { kind: "info" });
+
+  try {
+    const blob = await compressImageFile(file);
+    const fd = new FormData();
+    fd.append("image", blob, "photo.jpg");
+    fd.append("latitude", String(pos.lat));
+    fd.append("longitude", String(pos.lng));
+    if (caption) fd.append("message", caption);
+    if (replySnapshot?.id) fd.append("reply_to", replySnapshot.id);
+
+    const res = await fetch(`/api/bubbles/${bubbleId}/messages/image/`, {
+      method: "POST",
+      credentials: "include",
+      body: fd,
+    });
+
+    if (!res.ok) {
+      let detail = "Could not upload photo.";
+      try {
+        const err = await res.json();
+        if (err.detail) detail = err.detail;
+      } catch {
+        /* ignore */
+      }
+      setComposerHint(detail, { kind: "cooldown" });
+      return;
+    }
+
+    const msg = await res.json();
+    startSendCooldown();
+    lastSentReply = replySnapshot;
+    clearReply();
+    if ($("#chat-input")) $("#chat-input").value = "";
+    if (!isWsOpen()) appendMessage(msg);
+    setComposerHint("");
+  } catch (err) {
+    setComposerHint(err.message || "Could not upload photo.", { kind: "cooldown" });
+  } finally {
+    if (!isSendOnCooldown()) setMediaButtonsEnabled(true);
+  }
+}
+
+function setupMediaUpload() {
+  const galleryInput = $("#image-gallery-input");
+  const cameraInput = $("#image-camera-input");
+
+  $("#btn-image-gallery")?.addEventListener("click", () => {
+    if (!bubbleActive || !pos) return;
+    galleryInput?.click();
+  });
+
+  $("#btn-image-camera")?.addEventListener("click", () => {
+    if (!bubbleActive || !pos) return;
+    cameraInput?.click();
+  });
+
+  const onPick = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    await uploadChatImage(file);
+  };
+
+  galleryInput?.addEventListener("change", onPick);
+  cameraInput?.addEventListener("change", onPick);
 }
 
 function sendChat(text) {
@@ -1031,6 +1183,7 @@ async function main() {
   setupReplyComposer();
   setupMessageReplies();
   setupComposer();
+  setupMediaUpload();
   setupCreate();
   $("#btn-refresh-bubbles")?.addEventListener("click", refreshNearbyBubbles);
   $("#btn-refresh-bubbles-home")?.addEventListener("click", refreshNearbyBubbles);

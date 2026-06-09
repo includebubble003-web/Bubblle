@@ -12,14 +12,20 @@ from rest_framework.response import Response
 from sessions_app.models import AnonymousSession
 
 from .models import Bubble, Message
-from .serializers import BubbleCreateSerializer, MessageCreateSerializer, MessageOutSerializer
+from .serializers import (
+    BubbleCreateSerializer,
+    MessageCreateSerializer,
+    MessageImageUploadSerializer,
+    MessageOutSerializer,
+)
 from .membership import membership_clear
+from .image_utils import chat_image_upload_path, optimize_chat_image
 from .services import (
     active_user_count,
+    broadcast_message,
     get_reply_parent,
     haversine_distance_m,
     serialize_bubble_summary,
-    serialize_message,
     throttle_allow,
 )
 
@@ -175,7 +181,7 @@ def bubble_messages(request, bubble_id: UUID):
             .order_by("-created_at")[:limit]
         )
         items = list(reversed(list(qs)))
-        ser = MessageOutSerializer(items, many=True)
+        ser = MessageOutSerializer(items, many=True, context={"request": request})
         return Response({"results": ser.data})
 
     # POST
@@ -212,13 +218,69 @@ def bubble_messages(request, bubble_id: UUID):
     )
     msg = Message.objects.select_related("reply_to").get(pk=msg.pk)
 
-    from asgiref.sync import async_to_sync
-    from channels.layers import get_channel_layer
+    broadcast_message(bubble.id, msg)
 
-    channel_layer = get_channel_layer()
-    async_to_sync(channel_layer.group_send)(
-        f"bubble_{bubble.id}",
-        {"type": "bubble.chat", "message": serialize_message(msg)},
+    return Response(
+        MessageOutSerializer(msg, context={"request": request}).data,
+        status=status.HTTP_201_CREATED,
     )
 
-    return Response(MessageOutSerializer(msg).data, status=status.HTTP_201_CREATED)
+
+@api_view(["POST"])
+@ratelimit(key="ip", rate="30/m", method="POST")
+def bubble_message_image(request, bubble_id: UUID):
+    """Upload a photo (gallery or camera); optimized to WebP server-side."""
+    session = _anonymous_session_for_request(request)
+    if not session:
+        return Response({"detail": "Missing anonymous session cookie."}, status=status.HTTP_401_UNAUTHORIZED)
+
+    try:
+        bubble = Bubble.objects.get(id=bubble_id)
+    except Bubble.DoesNotExist:
+        return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if not bubble.is_joinable():
+        return Response({"detail": "Bubble is not active."}, status=status.HTTP_410_GONE)
+
+    ser = MessageImageUploadSerializer(data=request.data)
+    ser.is_valid(raise_exception=True)
+
+    lat = ser.validated_data["latitude"]
+    lng = ser.validated_data["longitude"]
+    caption = (ser.validated_data.get("message") or "").strip()
+    reply_to_id = ser.validated_data.get("reply_to")
+    parent = get_reply_parent(bubble.id, reply_to_id) if reply_to_id else None
+    if reply_to_id and not parent:
+        return Response({"detail": "Reply target not found."}, status=status.HTTP_400_BAD_REQUEST)
+
+    dist = haversine_distance_m(lat, lng, bubble.latitude, bubble.longitude)
+    if dist > bubble.radius:
+        return Response({"detail": "Outside bubble radius."}, status=status.HTTP_403_FORBIDDEN)
+
+    throttle_key = f"bbl:imgthrottle:{bubble.id}:{session.session_uuid}"
+    if not throttle_allow(throttle_key, 3):
+        return Response({"detail": "Slow down."}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+    try:
+        optimized, width, height = optimize_chat_image(ser.validated_data["image"])
+    except ValueError as e:
+        return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    msg = Message(
+        bubble=bubble,
+        anonymous_name=session.anonymous_name,
+        message=caption,
+        reply_to=parent,
+        image_width=width,
+        image_height=height,
+    )
+    msg.image.save(chat_image_upload_path(bubble.id), optimized, save=False)
+    msg.save()
+    msg = Message.objects.select_related("reply_to").get(pk=msg.pk)
+
+    broadcast_message(bubble.id, msg)
+
+    return Response(
+        MessageOutSerializer(msg, context={"request": request}).data,
+        status=status.HTTP_201_CREATED,
+    )

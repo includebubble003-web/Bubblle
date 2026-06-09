@@ -585,6 +585,31 @@
   word-break: break-word;
 }
 
+.msg-bubble-has-image .msg-text {
+  margin-top: 8px;
+}
+
+.msg-image-link {
+  display: block;
+  border-radius: 12px;
+  overflow: hidden;
+  max-width: min(280px, 100%);
+}
+
+.msg-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 320px;
+  object-fit: cover;
+  border-radius: 12px;
+  background: #0b1018;
+}
+
+.msg-bubble-mine .msg-image-link {
+  margin-left: auto;
+}
+
 .msg-time {
   display: block;
   font-size: 0.68rem;
@@ -720,6 +745,44 @@
 .composer-form {
   display: flex;
   gap: 8px;
+  align-items: flex-end;
+}
+
+.composer-input-row {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.composer-media-btn {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid #243044;
+  background: #0b1018;
+  color: #c5d0e6;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.composer-media-btn:hover:not(:disabled) {
+  border-color: #5eead4;
+  background: #121a28;
+}
+
+.composer-media-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.composer-input-row input {
+  flex: 1;
+  min-width: 0;
 }
 
 .composer-form input {
@@ -741,6 +804,7 @@
 .composer-form .btn-primary {
   border-radius: 14px;
   padding: 12px 18px;
+  flex-shrink: 0;
   transition: transform 0.12s, opacity 0.12s;
 }
 
