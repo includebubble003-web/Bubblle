@@ -4,7 +4,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("bubbles", "0001_initial"),
+        ("bubbles", "0002_message_reply_to"),
     ]
 
     operations = [
