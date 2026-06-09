@@ -5,7 +5,8 @@ Usage:
   python manage.py seed_demo_chat
   python manage.py seed_demo_chat --lat 19.076 --lng 72.8777
   python manage.py seed_demo_chat --clear
-  docker compose exec web python manage.py seed_demo_chat
+  python manage.py seed_demo_chat --clear-only
+  docker compose exec web python manage.py seed_demo_chat --clear-only
 """
 from __future__ import annotations
 
@@ -48,7 +49,12 @@ class Command(BaseCommand):
         parser.add_argument(
             "--clear",
             action="store_true",
-            help="Delete previously seeded demo bubbles before seeding.",
+            help="Delete previously seeded demo bubbles, then create fresh ones.",
+        )
+        parser.add_argument(
+            "--clear-only",
+            action="store_true",
+            help="Delete seeded demo bubbles only (no re-seed).",
         )
         parser.add_argument(
             "--offset-km",
@@ -74,9 +80,12 @@ class Command(BaseCommand):
         offset_km = options["offset_km"]
         seed_online = not options["no_fake_online"]
 
-        if options["clear"]:
+        if options["clear"] or options["clear_only"]:
             deleted = self._clear_demo_bubbles()
             self.stdout.write(self.style.WARNING(f"Cleared {deleted} existing demo bubble(s)."))
+            if options["clear_only"]:
+                self.stdout.write(self.style.SUCCESS("Done (no new bubbles created)."))
+                return
 
         radius = int(getattr(settings, "BUBBLLE_DEFAULT_RADIUS_M", 5000))
         if options["expires_hours"] is not None:
