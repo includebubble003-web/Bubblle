@@ -645,7 +645,10 @@ function appendMessage(m, opts = { scroll: true }) {
       ${replyQuoteHtml(m.reply_to)}
       <div class="msg-bubble-head">
         ${mine ? "" : `<span class="msg-author">${escapeHtml(m.anonymous_name)}</span>`}
-        <button type="button" class="msg-reply-btn" aria-label="Reply to this message">Reply</button>
+        <button type="button" class="msg-reply-btn" aria-label="Reply to this message">
+          <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+          <span>Reply</span>
+        </button>
       </div>
       ${messageBodyHtml(m)}
       <span class="msg-time">${t}</span>
