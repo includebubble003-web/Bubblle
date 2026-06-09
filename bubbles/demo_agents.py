@@ -23,7 +23,9 @@ from django.conf import settings as django_settings
 
 from bubbles.demo_content import (
     BUBBLE_TITLES,
-    pick_personas_for_bubble,
+    build_archetype_system_prompt,
+    mood_hint_for_message,
+    pick_bot_identities,
     topic_for_bubble,
 )
 
@@ -74,6 +76,7 @@ class BubbleAgentSpec:
     lng: float
     topic: str
     personas: list[str]
+    archetypes: list[str]
 
 
 # Backward-compatible alias
@@ -96,6 +99,7 @@ def load_all_joinable_bubble_specs(
     specs: list[BubbleAgentSpec] = []
     for b in bubbles:
         bid = str(b.id)
+        identities = pick_bot_identities(bid, bots_per_bubble)
         specs.append(
             BubbleAgentSpec(
                 bubble_id=bid,
@@ -103,7 +107,8 @@ def load_all_joinable_bubble_specs(
                 lat=b.latitude,
                 lng=b.longitude,
                 topic=topic_for_bubble(b.title),
-                personas=pick_personas_for_bubble(bid, bots_per_bubble),
+                personas=[n for n, _ in identities],
+                archetypes=[a for _, a in identities],
             )
         )
     return specs
@@ -189,6 +194,7 @@ class ChatAgent:
     bubble_id: str
     bubble_title: str
     name: str
+    archetype: str
     topic: str
     lat: float
     lng: float
@@ -197,7 +203,6 @@ class ChatAgent:
     recent: list[str] = field(default_factory=list)
     _reply_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     _pool_gate: BubbleReplyGate | None = None
-    _personality: str = ""
 
     def ws_url(self) -> str:
         parsed = urlparse(self.config.base_url)
@@ -251,21 +256,9 @@ class ChatAgent:
         self.bubble_title = spec.title
         return True
 
-    def _personality_hint(self) -> str:
-        if self._personality:
-            return self._personality
-        styles = [
-            "thoda funny aur mazedaar",
-            "seedha aur short",
-            "thoda emotional / supportive",
-            "practical aur logical",
-            "filmy references kabhi kabhi",
-            "chill aur laid-back",
-        ]
-        self._personality = styles[hash(self.name) % len(styles)]
-        return self._personality
-
-    async def generate_reply(self, incoming_text: str, incoming_author: str) -> str:
+    async def generate_reply(
+        self, incoming_text: str, incoming_author: str, msg_id: str | None = None
+    ) -> str:
         from openai import AsyncOpenAI
 
         api_key = _openai_api_key()
@@ -274,20 +267,15 @@ class ChatAgent:
 
         client = AsyncOpenAI(api_key=api_key)
         context = "\n".join(self.recent[-self.config.history_lines :])
-        system = (
-            f"Tu '{self.name}' hai — ek wulgar desi Indian insaan jo WhatsApp ya local group chat mein baat kar raha/rahi hai. "
-            f"Topic / group: {self.topic}. "
-            f"Tera alag style: {self._personality_hint()}. "
-            "Sirf Hindi mein jawab de (Devanagari script). 1-2 chhote, natural vakya. "
-            "Bilkul real lagna chahiye — casual, kabhi emoji, apni rai, thoda slang theek hai. "
-            "Dusre bots jaisa mat likh — apna unique angle de. "
-            "Kabhi mat likh: AI, assistant, language model, main madad kar sakta hoon. "
-            "English sirf common words (ok, nice) agar zaroori ho. No bullet lists, no formal tone."
+        mood = mood_hint_for_message(self.bubble_id, self.name, msg_id)
+        system = build_archetype_system_prompt(
+            self.name, self.topic, self.archetype, mood
         )
         user = (
-            f"Recent chat:\n{context}\n\n"
+            f"Recent chat:\n{context or '(abhi kuch nahi)'}\n\n"
             f"{incoming_author} ne abhi likha: {incoming_text}\n\n"
-            f"Apna reply likh ({self.name}):"
+            f"Sirf apna reply likh — {self.name} ({self.archetype}), pehle se use ki hui "
+            f"opening lines mat use kar:"
         )
         resp = await client.chat.completions.create(
             model=self.config.openai_model,
@@ -295,8 +283,10 @@ class ChatAgent:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            max_tokens=120,
-            temperature=0.95,
+            max_tokens=100,
+            temperature=1.0,
+            presence_penalty=0.6,
+            frequency_penalty=0.5,
         )
         text = (resp.choices[0].message.content or "").strip()
         return text[:500]
@@ -337,7 +327,12 @@ class ChatAgent:
                     backoff = 3
                     reconnects = 0
                     if self.config.verbose:
-                        logger.info("%s WS connected → bubble %s", self.name, self.bubble_id[:8])
+                        logger.info(
+                            "%s [%s] WS connected → bubble %s",
+                            self.name,
+                            self.archetype,
+                            self.bubble_id[:8],
+                        )
                     async for raw in ws:
                         try:
                             data = json.loads(raw)
@@ -412,7 +407,7 @@ class ChatAgent:
         async with self._reply_lock:
             await asyncio.sleep(total_wait)
             try:
-                reply = await self.generate_reply(text, author)
+                reply = await self.generate_reply(text, author, msg_id=msg_id)
             except Exception as exc:
                 logger.error("%s OpenAI failed: %s", self.name, exc)
                 return
@@ -449,16 +444,17 @@ async def _start_bubble_agents(
             spec.title[:40],
             config.base_url,
             spec.bubble_id,
-            ", ".join(spec.personas),
+            ", ".join(f"{n} [{a}]" for n, a in zip(spec.personas, spec.archetypes, strict=True)),
         )
 
     pool: list[ChatAgent] = []
     gate = BubbleReplyGate(min_gap_seconds=config.reply_min_gap)
-    for name in spec.personas:
+    for name, archetype in zip(spec.personas, spec.archetypes, strict=True):
         agent = ChatAgent(
             bubble_id=spec.bubble_id,
             bubble_title=spec.title,
             name=name,
+            archetype=archetype,
             topic=spec.topic,
             lat=spec.lat,
             lng=spec.lng,

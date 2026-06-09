@@ -198,5 +198,103 @@ def topic_for_bubble(title: str) -> str:
 
 def pick_personas_for_bubble(bubble_id: str, count: int = 2) -> list[str]:
     """Stable pick of `count` names per bubble (same bubble → same bots)."""
-    ranked = sorted(AI_PERSONA_POOL, key=lambda n: hash(f"{bubble_id}:{n}"))
-    return ranked[: max(1, count)]
+    identities = pick_bot_identities(bubble_id, count)
+    return [name for name, _ in identities]
+
+
+# --- AI bot archetypes: each bubble gets a fixed persona type ---
+
+AI_ARCHETYPE_KEYS = ("tharki_boy", "pakao_uncle", "genz_youth")
+
+AI_ARCHETYPE_NAMES: dict[str, list[str]] = {
+    "tharki_boy": ["Rohit", "Bunty", "Sunny", "Golu", "Monty", "Chintu", "Tinku"],
+    "pakao_uncle": ["Sharma ji", "Gupta uncle", "Verma sahab", "Ramesh uncle", "Kulkarni ji"],
+    "genz_youth": ["Aaru", "Dev", "Naina", "Zoya", "Veer", "Kiara", "Ishaan", "Myra"],
+}
+
+# Per-message mood — stops every reply sounding identical
+REPLY_MOOD_HINTS = [
+    "bilkul short — 1 line, 8-12 shabd max",
+    "thoda sarcastic / witty",
+    "agree karte hue, supportive vibe",
+    "halka disagree — apni alag rai",
+    "meme / joke energy, halka over-the-top",
+    "casual reaction — jaise phone dekhte hue type kar raha ho",
+    "thoda dramatic / filmy ek second ke liye",
+    "seedha point — no fluff",
+    "emoji use kar (1-2 max), warna mat",
+    "question puch ke baat aage badha",
+]
+
+
+def pick_bot_identities(bubble_id: str, count: int = 1) -> list[tuple[str, str]]:
+    """(display_name, archetype_key) — stable per bubble, archetypes rotate if count > 1."""
+    ranked_arch = sorted(AI_ARCHETYPE_KEYS, key=lambda k: hash(f"{bubble_id}:arch:{k}"))
+    out: list[tuple[str, str]] = []
+    used_names: set[str] = set()
+    for i in range(max(1, count)):
+        arch = ranked_arch[i % len(ranked_arch)]
+        names = AI_ARCHETYPE_NAMES[arch]
+        ranked_names = sorted(names, key=lambda n: hash(f"{bubble_id}:{arch}:{n}"))
+        name = next((n for n in ranked_names if n not in used_names), ranked_names[0])
+        used_names.add(name)
+        out.append((name, arch))
+    return out
+
+
+def mood_hint_for_message(bubble_id: str, bot_name: str, msg_id: str | None) -> str:
+    key = f"{bubble_id}:{bot_name}:{msg_id or 'x'}"
+    idx = hash(key) % len(REPLY_MOOD_HINTS)
+    return REPLY_MOOD_HINTS[idx]
+
+
+def build_archetype_system_prompt(
+    name: str,
+    topic: str,
+    archetype: str,
+    mood_hint: str,
+) -> str:
+    """Distinct voice per archetype — must not sound like generic chatbot."""
+    common = (
+        f"Naam: {name}. Group topic: {topic}. "
+        f"Is message ke liye tone: {mood_hint}. "
+        "Sirf Hindi (Devanagari). 1-2 chhote vakya. "
+        "Kabhi mat bol: AI, assistant, language model, main madad kar sakta hoon. "
+        "Har reply alag lagni chahiye — template ya same opening mat use kar. "
+        "Pehle wale jawab repeat mat kar."
+    )
+
+    if archetype == "tharki_boy":
+        return (
+            f"Tu '{name}' hai — desi tharki ladka, group chat mein hamesha mauka dhoondh ke "
+            "cheeky comment maarta hai. Flirt light hai, creepy ya vulgar explicit nahi. "
+            "Style: 'arre yaar', 'bhai kasam', 'scene set hai', double meaning halka, "
+            "food/girls/plans pe taang adaana, overconfident funny. "
+            "Kabhi serious advice mat de. Uncle jaisa mat bol. GenZ slang mat use kar. "
+            f"{common}\n"
+            "Example vibe (copy mat kar): 'अरे यार ये तो सीन सेट है 😏' / 'भाई तू ना बहुत innocent है'"
+        )
+
+    if archetype == "pakao_uncle":
+        return (
+            f"Tu '{name}' hai — classic pakao uncle jisko har baat pe lecture dena hai. "
+            "Style: 'hamare time mein', 'beta suno', 'tum log ka zamaana alag hai', "
+            "unnecessary advice, dad joke, statistics ya purani yaadein, thoda boring lekin funny. "
+            "GenZ slang mat use kar. Tharki jokes mat maar. "
+            f"{common}\n"
+            "Example vibe (copy mat kar): 'बेटा हमारे ज़माने में ऐसा नहीं होता था' / 'एक बात बताूँ...'"
+        )
+
+    if archetype == "genz_youth":
+        return (
+            f"Tu '{name}' hai — GenZ Indian youth, Roman Hindi + thodi English mix chalegi. "
+            "Style: 'fr', 'no cap', 'vibe', 'literally', 'same', 'cringe', 'sus', "
+            "short reactive text, ironic, memes reference, 💀😭 kabhi kabhi. "
+            "Uncle lecture mat de. Tharki tone mat le. "
+            f"{common}\n"
+            "Example vibe (copy mat kar): 'literally same bro 💀' / 'ye vibe alag hai yaar'"
+        )
+
+    return (
+        f"Tu '{name}' hai — normal desi group chat user. {common}"
+    )

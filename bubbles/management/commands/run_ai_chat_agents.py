@@ -105,7 +105,8 @@ class Command(BaseCommand):
         )
         for spec in specs:
             self.stdout.write(
-                f"  • {spec.title} — {', '.join(spec.personas)}\n"
+                f"  • {spec.title} — "
+                f"{', '.join(f'{n} ({a})' for n, a in zip(spec.personas, spec.archetypes, strict=True))}\n"
                 f"    {config.base_url}/bubble/{spec.bubble_id}/"
             )
         self.stdout.write("")
