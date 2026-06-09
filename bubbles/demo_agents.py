@@ -135,9 +135,9 @@ def get_joinable_spec_for_bubble_id(bubble_id: str) -> BubbleAgentSpec | None:
 class AgentConfig:
     base_url: str = "http://127.0.0.1:8000"
     openai_model: str = "gpt-4o-mini"
-    reply_delay_min: float = 60.0
-    reply_delay_max: float = 90.0
-    reply_min_gap: float = 60.0
+    reply_delay_min: float = 10.0
+    reply_delay_max: float = 10.0
+    reply_min_gap: float = 10.0
     max_replies_per_message: int = 1
     bots_per_bubble: int = 1
     poll_seconds: float = 30.0
