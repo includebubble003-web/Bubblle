@@ -103,9 +103,33 @@
         </div>
       </div>
       <form id="chat-form" class="composer-form">
-        <input id="chat-input" autocomplete="off" maxlength="2000" placeholder="Message…" disabled />
+        <div class="composer-input-row">
+          <button
+            type="button"
+            class="btn-icon composer-media-btn"
+            id="btn-image-gallery"
+            title="Upload photo"
+            aria-label="Upload photo"
+            disabled
+          >
+            🖼
+          </button>
+          <button
+            type="button"
+            class="btn-icon composer-media-btn"
+            id="btn-image-camera"
+            title="Take photo"
+            aria-label="Take photo"
+            disabled
+          >
+            📷
+          </button>
+          <input id="chat-input" autocomplete="off" maxlength="2000" placeholder="Message…" disabled />
+        </div>
         <button class="btn btn-primary" type="submit" id="btn-send" disabled>Send</button>
       </form>
+      <input type="file" id="image-gallery-input" accept="image/*" hidden />
+      <input type="file" id="image-camera-input" accept="image/*" capture="environment" hidden />
       <p class="composer-hint muted" id="composer-hint" hidden></p>
     </footer>
   </div>

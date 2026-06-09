@@ -57,17 +57,38 @@ def serialize_message(msg: Message) -> dict:
     payload = {
         "id": str(msg.id),
         "anonymous_name": msg.anonymous_name,
-        "message": msg.message,
+        "message": msg.message or "",
         "created_at": msg.created_at.isoformat(),
     }
+    if msg.image:
+        payload["image_url"] = msg.image.url
+        if msg.image_width:
+            payload["image_width"] = msg.image_width
+        if msg.image_height:
+            payload["image_height"] = msg.image_height
     parent = getattr(msg, "reply_to", None)
     if msg.reply_to_id and parent:
+        reply_preview = parent.message or ""
+        if not reply_preview and parent.image:
+            reply_preview = "📷 Photo"
         payload["reply_to"] = {
             "id": str(parent.id),
             "anonymous_name": parent.anonymous_name,
-            "message": parent.message,
+            "message": reply_preview,
+            "image_url": parent.image.url if parent.image else None,
         }
     return payload
+
+
+def broadcast_message(bubble_id: UUID | str, msg: Message) -> None:
+    from asgiref.sync import async_to_sync
+    from channels.layers import get_channel_layer
+
+    channel_layer = get_channel_layer()
+    async_to_sync(channel_layer.group_send)(
+        bubble_channel_group(bubble_id),
+        {"type": "bubble.chat", "message": serialize_message(msg)},
+    )
 
 
 def serialize_bubble_summary(bubble: Bubble, viewer_lat: float, viewer_lng: float) -> dict:

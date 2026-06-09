@@ -94,6 +94,14 @@ STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+# Chat image uploads — resized to WebP server-side
+BUBBLLE_IMAGE_MAX_BYTES = int(os.environ.get("BUBBLLE_IMAGE_MAX_BYTES", str(5 * 1024 * 1024)))
+BUBBLLE_IMAGE_MAX_DIMENSION = int(os.environ.get("BUBBLLE_IMAGE_MAX_DIMENSION", "1280"))
+BUBBLLE_IMAGE_WEBP_QUALITY = int(os.environ.get("BUBBLLE_IMAGE_WEBP_QUALITY", "80"))
+
 # In DEBUG, serve from app static dirs without running collectstatic; in prod, use STATIC_ROOT (Docker build).
 WHITENOISE_USE_FINDERS = DEBUG
 WHITENOISE_MAX_AGE = 60 * 60 * 24 * 30 if not DEBUG else 0

@@ -46,6 +46,8 @@ services:
       # OPENAI_* come from env_file (.env) — do not override with empty ${OPENAI_API_KEY:-}
     ports:
       - "8000:8000"
+    volumes:
+      - media_data:/app/media
     depends_on:
       db:
         condition: service_healthy
@@ -105,3 +107,4 @@ services:
 
 volumes:
   postgres_data:
+  media_data:

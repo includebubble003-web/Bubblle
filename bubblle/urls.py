@@ -1,5 +1,7 @@
+from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
+from django.views.static import serve
 
 from .views import ChatShellView
 
@@ -10,3 +12,12 @@ urlpatterns = [
     path("", ChatShellView.as_view(), name="home"),
     path("bubble/<uuid:bubble_id>/", ChatShellView.as_view(), name="bubble-page"),
 ]
+
+if settings.MEDIA_URL and settings.MEDIA_ROOT:
+    urlpatterns += [
+        path(
+            f"{settings.MEDIA_URL.lstrip('/')}/<path:path>",
+            serve,
+            {"document_root": settings.MEDIA_ROOT},
+        ),
+    ]
