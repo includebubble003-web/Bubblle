@@ -45,6 +45,8 @@ let pendingReply = null;
 let lastSentReply = null;
 let expiryTickTimer = null;
 let bubbleExpiresAtMs = null;
+let roomInitializedFor = null;
+let historyLoadGeneration = 0;
 
 function escapeHtml(s) {
   return String(s)
@@ -469,6 +471,8 @@ function showWelcome() {
   thread?.setAttribute("hidden", "hidden");
   $("#chat-composer")?.setAttribute("hidden", "hidden");
   clearReply();
+  roomInitializedFor = null;
+  historyLoadGeneration += 1;
   messageById.clear();
   const messages = $("#messages");
   if (messages) messages.innerHTML = "";
@@ -1028,15 +1032,19 @@ function loadBubbleMeta() {
 
 function loadHistory() {
   if (!bubbleId) return;
+  const gen = ++historyLoadGeneration;
+  const forBubble = bubbleId;
   const ph = $("#messages-placeholder");
   if (ph) ph.textContent = "Loading messages…";
 
   fetch(`/api/bubbles/${bubbleId}/messages/?limit=80`, { credentials: "include" })
     .then((res) => (res.ok ? res.json() : null))
     .then((data) => {
+      if (gen !== historyLoadGeneration || forBubble !== bubbleId) return;
       clearMessagesPlaceholder();
       const wrap = $("#messages");
       wrap.innerHTML = "";
+      messageById.clear();
       if (!data?.results?.length) {
         const p = document.createElement("p");
         p.className = "messages-placeholder muted";
@@ -1047,7 +1055,10 @@ function loadHistory() {
       for (const m of data.results) appendMessage(m, { scroll: false });
       scrollMessages();
     })
-    .catch(() => clearMessagesPlaceholder());
+    .catch(() => {
+      if (gen !== historyLoadGeneration || forBubble !== bubbleId) return;
+      clearMessagesPlaceholder();
+    });
 }
 
 function teardownChat() {
@@ -1065,10 +1076,20 @@ function onEnterBubble() {
     teardownChat();
     return;
   }
+
   allowReconnect = true;
   bubbleActive = true;
   reconnectAttempt = 0;
   showThread();
+
+  // GPS refines a second after join — do not wipe chat on every position update.
+  if (roomInitializedFor === bubbleId) {
+    loadBubbleMeta();
+    if (pos && !isWsOpen() && allowReconnect) connectWs();
+    return;
+  }
+
+  roomInitializedFor = bubbleId;
   messageById.clear();
   clearReply();
   const messages = $("#messages");
