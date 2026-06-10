@@ -5,7 +5,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <link rel="stylesheet" href="{% static 'css/chat.css' %}" />
+<link rel="stylesheet" href="{% static 'css/map.css' %}" />
 {% endblock %}
 {% block body_class %}chat-body{% endblock %}
 {% block body %}
@@ -20,38 +22,114 @@
         </span>
         <span class="brand-name">Bubblle</span>
       </a>
-      <span class="loc-pill sidebar-loc-pill" id="loc-pill-sidebar" data-state="idle" title="Location" aria-hidden="true">
-        <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-4.35 7-11a7 7 0 1 0-14 0c0 6.65 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
-      </span>
     </div>
-
-    <form id="create-form" class="sidebar-create">
-      <input name="title" maxlength="120" required placeholder="New bubble title…" />
-      <button type="submit" class="btn btn-accent btn-block btn-with-icon" id="btn-create">
-        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-        <span>Create bubble</span>
-      </button>
-    </form>
-
-    <div class="sidebar-section-head">
-      <span>Nearby · 5 km</span>
-      <button type="button" class="btn btn-ghost btn-sm btn-icon-only" id="btn-refresh-bubbles" title="Refresh" aria-label="Refresh nearby bubbles">
-        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-      </button>
-    </div>
-
     <ul class="sidebar-bubbles" id="sidebar-bubbles"></ul>
-    <div class="sidebar-empty state-panel" id="sidebar-empty">
-      <div class="state-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-      </div>
-      <p class="state-text muted">Getting location…</p>
-    </div>
   </aside>
 
   <div class="chat-main">
+    <!-- Map-first landing (home) -->
+    <section class="map-screen" id="map-screen" aria-label="Nearby conversations map">
+      <div id="onboarding" class="onboarding" hidden>
+        <div class="onboarding-card">
+          <div class="onboarding-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21s7-4.35 7-11a7 7 0 1 0-14 0c0 6.65 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/><path d="M8 14c1.5 1 2.5 2 4 2s2.5-1 4-2"/></svg>
+          </div>
+          <h1 class="onboarding-title">Bubblle</h1>
+          <p class="onboarding-lead">See and join anonymous conversations happening around you.</p>
+          <p class="onboarding-note">Location is only used to discover nearby bubbles. Your exact position is never shared in chat.</p>
+          <button type="button" class="btn-onboarding" id="btn-enable-location">Enable Location</button>
+          <p class="onboarding-error" id="onboarding-error" hidden></p>
+        </div>
+      </div>
+
+      <div class="map-overlay-top">
+        <div class="live-nearby-badge" id="map-live-count" data-state="idle">
+          <span class="live-nearby-dot" aria-hidden="true"></span>
+          <span class="live-nearby-text">Live nearby</span>
+        </div>
+        <div class="map-identity-mini">
+          <div class="identity" id="identity-map">
+            <span class="identity-avatar" aria-hidden="true">
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+            </span>
+            <input id="display-name-map" class="identity-input" maxlength="64" autocomplete="nickname" placeholder="Your name" aria-label="Display name" />
+          </div>
+        </div>
+      </div>
+
+      <div id="map" class="map-container" role="application" aria-label="Map of nearby bubbles"></div>
+
+      <div class="map-loading" id="map-loading" hidden aria-live="polite">
+        <div class="map-loading-shimmer" aria-hidden="true"></div>
+        <p class="map-loading-text">Locating you…</p>
+      </div>
+
+      <div class="map-empty-card" id="map-empty" hidden>
+        <p class="map-empty-title">No conversations nearby yet</p>
+        <p class="map-empty-lead">Start the first bubble around you.</p>
+        <button type="button" class="map-empty-create" id="map-empty-create">Create bubble</button>
+      </div>
+
+      <button type="button" class="map-fab" id="fab-create" aria-label="Create bubble">+</button>
+    </section>
+
+    <div id="sheet-backdrop" class="sheet-backdrop" hidden></div>
+
+    <div id="bubble-sheet" class="bottom-sheet" hidden role="dialog" aria-labelledby="sheet-bubble-title">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="sheet-header">
+        <div>
+          <h2 class="sheet-title" id="sheet-bubble-title">Bubble</h2>
+          <p class="sheet-sub" id="sheet-bubble-sub">Anonymous chat nearby</p>
+        </div>
+        <button type="button" class="sheet-close btn-icon-only" id="bubble-sheet-close" aria-label="Close">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <div class="sheet-trending" id="sheet-trending" hidden>🔥 People chatting now</div>
+      <div class="sheet-stats">
+        <div class="sheet-stat">
+          <span class="sheet-stat-value" id="sheet-bubble-distance">—</span>
+          <span class="sheet-stat-label">Away</span>
+        </div>
+        <div class="sheet-stat">
+          <span class="sheet-stat-value" id="sheet-bubble-users">0</span>
+          <span class="sheet-stat-label">Active</span>
+        </div>
+        <div class="sheet-stat">
+          <span class="sheet-stat-value" id="sheet-bubble-expiry">—</span>
+          <span class="sheet-stat-label">Expires</span>
+        </div>
+      </div>
+      <button type="button" class="btn-sheet-primary" id="sheet-join">Join conversation</button>
+    </div>
+
+    <div id="create-sheet" class="bottom-sheet" hidden role="dialog" aria-label="Create bubble">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="sheet-header">
+        <div>
+          <h2 class="sheet-title">Create bubble</h2>
+          <p class="sheet-sub">At your current location</p>
+        </div>
+        <button type="button" class="sheet-close btn-icon-only" id="create-sheet-close" aria-label="Close">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <form id="create-bubble-form" class="create-sheet-form">
+        <input id="create-bubble-title" name="title" maxlength="120" required placeholder="Bubble name…" autocomplete="off" />
+        <textarea id="create-bubble-desc" name="description" maxlength="200" rows="2" placeholder="Optional description (sent as your first message)…"></textarea>
+        <p class="create-sheet-hint">Your bubble appears on the map for anyone within 5 km.</p>
+        <p class="sheet-error" id="create-sheet-error" hidden></p>
+        <button type="submit" class="btn-sheet-primary" id="create-bubble-submit">Create &amp; join</button>
+      </form>
+    </div>
+
+    <!-- Chat room UI -->
     <header class="chat-topbar">
       <div class="topbar-start">
+        <a href="/" class="btn-icon btn-back-map" id="btn-back-map" aria-label="Back to map" title="Map">
+          <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
+        </a>
         <button type="button" class="btn-icon mobile-only" id="btn-drawer" aria-label="Open bubbles" aria-expanded="false" aria-controls="sidebar">
           <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
         </button>
@@ -90,38 +168,8 @@
       </div>
     </header>
 
-    <div class="chat-panel chat-panel--idle" id="chat-panel">
-      <section class="home-browse" id="home-browse" aria-label="Nearby bubbles">
-        <div class="home-hero">
-          <div class="home-hero-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor" opacity="0.2"/></svg>
-          </div>
-          <h2 class="home-hero-title">Find your bubble</h2>
-          <p class="home-browse-lead muted">Join a chat near you, or create a new bubble to start talking.</p>
-        </div>
-        <form id="create-form-home" class="home-create">
-          <input name="title" maxlength="120" required placeholder="New bubble title…" />
-          <button type="submit" class="btn btn-accent btn-block btn-with-icon" id="btn-create-home">
-            <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-            <span>Create bubble</span>
-          </button>
-        </form>
-        <div class="home-section-head">
-          <span>Nearby · 5 km</span>
-          <button type="button" class="btn btn-ghost btn-sm btn-icon-only" id="btn-refresh-bubbles-home" title="Refresh" aria-label="Refresh nearby bubbles">
-            <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-          </button>
-        </div>
-        <ul class="home-bubbles bubble-list" id="home-bubbles"></ul>
-        <div class="home-empty state-panel" id="home-empty">
-          <div class="state-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-          </div>
-          <p class="state-text muted">Getting location…</p>
-        </div>
-      </section>
-
-      <div class="chat-thread" id="chat-thread" hidden>
+    <div class="chat-panel" id="chat-panel">
+      <div class="chat-thread" id="chat-thread" {% if not bubble_id %}hidden{% endif %}>
         <div id="chat-status" class="banner banner-warn thread-banner" hidden></div>
         <div class="messages-scroll chat-wallpaper" id="messages-scroll">
           <div class="messages-list" id="messages" aria-live="polite">
@@ -136,7 +184,7 @@
       </div>
     </div>
 
-    <footer class="chat-composer" id="chat-composer" hidden>
+    <footer class="chat-composer" id="chat-composer" {% if not bubble_id %}hidden{% endif %}>
       <p class="composer-typing" id="typing" hidden></p>
       <div class="reply-compose" id="reply-compose" hidden>
         <div class="reply-compose-inner">
@@ -179,5 +227,6 @@
 <script>
   window.__BUBBLE_ID__ = "{{ bubble_id|default:'' }}";
 </script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="{% static 'js/chat-app.js' %}" type="module"></script>
 {% endblock %}

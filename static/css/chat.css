@@ -769,9 +769,11 @@
   flex: 1;
 }
 
-.chat-panel--idle {
-  align-items: center;
-  justify-content: center;
+.chat-app--room .chat-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .chat-thread {

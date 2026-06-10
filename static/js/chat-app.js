@@ -5,11 +5,19 @@ import { bootstrapSession, cachedDisplayName, updateDisplayName } from "./sessio
 import {
   acquireLocation,
   formatGeolocationError,
+  geolocationPermissionState,
   isGeolocationContextOk,
   readCachedPosition,
   requestLocationOnce,
   secureContextHint,
 } from "./geo.js";
+import {
+  hideOnboarding,
+  initMapHome,
+  onMapBubblesUpdated,
+  onMapPositionUpdate,
+  showOnboarding,
+} from "./map-home.js";
 
 const $ = (sel) => document.querySelector(sel);
 const SEARCH_RADIUS_M = 5000;
@@ -283,15 +291,8 @@ function setLocPill(state, title = "") {
   }
 }
 
-function setBrowseEmpty(text) {
-  for (const sel of ["#sidebar-empty", "#home-empty"]) {
-    const el = $(sel);
-    if (!el) continue;
-    el.hidden = !text;
-    const textEl = el.querySelector(".state-text");
-    if (textEl) textEl.textContent = text || "";
-    else el.textContent = text || "";
-  }
+function setBrowseEmpty(_text) {
+  /* Legacy — map view uses map-empty card instead */
 }
 
 function updateRoomAvatar(title) {
@@ -307,6 +308,8 @@ function applyPosition(p, { quiet = false } = {}) {
   $("#f-lng").value = String(p.lng);
   setLocPill("ok");
   if (!quiet) setBrowseEmpty("");
+  hideOnboarding();
+  onMapPositionUpdate(p);
   refreshSidebar();
   startNearbyPolling();
   if (bubbleId) {
@@ -315,26 +318,38 @@ function applyPosition(p, { quiet = false } = {}) {
   }
 }
 
-function startLocation() {
+function beginLocationWatch() {
+  if (stopLocation) stopLocation();
+  stopLocation = acquireLocation({
+    onUpdate: (p, meta) => applyPosition(p, { quiet: meta.source === "refined" }),
+    onError: (err) => {
+      if (!bubbleId) showOnboarding(formatGeolocationError(err));
+      setLocPill("error");
+    },
+  });
+}
+
+async function startLocation() {
   if (!isGeolocationContextOk()) {
     setLocPill("error", secureContextHint());
-    setBrowseEmpty(secureContextHint());
+    if (!bubbleId) showOnboarding(secureContextHint());
     return;
   }
 
   const cached = readCachedPosition();
   if (cached) {
     applyPosition(cached, { quiet: true });
-    if (stopLocation) stopLocation();
-    stopLocation = acquireLocation({
-      onUpdate: (p, meta) => applyPosition(p, { quiet: meta.source === "refined" }),
-      onError: () => {},
-    });
+    beginLocationWatch();
     return;
   }
 
-  setLocPill("idle");
-  setBrowseEmpty("Tap + Create to allow location, or ↻ to refresh nearby.");
+  setLocPill("loading");
+  if (!bubbleId) {
+    const perm = await geolocationPermissionState();
+    if (perm === "granted") hideOnboarding();
+    else showOnboarding();
+  }
+  beginLocationWatch();
 }
 
 async function ensureLocation({ hint = "Allow location to continue…" } = {}) {
@@ -391,23 +406,22 @@ function bubbleListItemHtml(b) {
   </li>`;
 }
 
-function renderBubbleLists() {
-  const lists = [$("#sidebar-bubbles"), $("#home-bubbles")].filter(Boolean);
-  if (!lists.length) return;
+function sortBubblesByActivity(bubbles) {
+  return [...bubbles].sort((a, b) => {
+    const act = activeUsers(b) - activeUsers(a);
+    if (act !== 0) return act;
+    return (a.distance_m ?? 0) - (b.distance_m ?? 0);
+  });
+}
 
+function renderBubbleLists() {
+  const ul = $("#sidebar-bubbles");
+  if (!ul) return;
   if (!nearbyBubbles.length) {
-    setBrowseEmpty(pos ? "No bubbles within 5 km. Create one!" : "Waiting for location…");
-    lists.forEach((ul) => {
-      ul.innerHTML = "";
-    });
+    ul.innerHTML = "";
     return;
   }
-  setBrowseEmpty("");
-
-  const html = nearbyBubbles.map((b) => bubbleListItemHtml(b)).join("");
-  for (const ul of lists) {
-    ul.innerHTML = html;
-  }
+  ul.innerHTML = nearbyBubbles.map((b) => bubbleListItemHtml(b)).join("");
   updateBubbleExpiryDisplays();
 }
 
@@ -425,10 +439,11 @@ async function refreshSidebar() {
       return;
     }
     const data = await res.json();
-    nearbyBubbles = data.results || [];
+    nearbyBubbles = sortBubblesByActivity(data.results || []);
     renderBubbleLists();
+    onMapBubblesUpdated(nearbyBubbles);
   } catch {
-    setBrowseEmpty("Network error loading bubbles.");
+    onMapBubblesUpdated([]);
   }
 }
 
@@ -448,69 +463,90 @@ function stopNearbyPolling() {
 
 /* --- Identity --- */
 
+function setIdentityError(hasError) {
+  for (const id of ["#display-name", "#display-name-map"]) {
+    const el = $(id);
+    if (!el) continue;
+    el.classList.toggle("identity-input-error", hasError);
+  }
+}
+
 async function saveName() {
-  const input = $("#display-name");
+  const input = $("#display-name") || $("#display-name-map");
   if (!input) return;
-  const trimmed = input.value.trim();
+  const trimmed = (input.value || "").trim();
   if (trimmed.length < 2) {
-    input.classList.add("identity-input-error");
+    setIdentityError(true);
     return;
   }
-  input.classList.remove("identity-input-error");
+  setIdentityError(false);
   const previousName = myName;
   try {
     const data = await updateDisplayName(trimmed);
     const newName = data.anonymous_name;
     trackMyName(newName);
-    input.value = newName;
+    syncNameInputs(newName);
     if (previousName && previousName !== newName) {
       refreshChatIdentity(previousName, newName);
     }
-    input.classList.add("identity-saved");
-    setTimeout(() => input.classList.remove("identity-saved"), 600);
-  } catch (err) {
-    input.classList.add("identity-input-error");
+    for (const id of ["#display-name", "#display-name-map"]) {
+      const el = $(id);
+      if (!el) continue;
+      el.classList.add("identity-saved");
+      setTimeout(() => el.classList.remove("identity-saved"), 600);
+    }
+  } catch {
+    setIdentityError(true);
+  }
+}
+
+function flushPendingBubbleIntro() {
+  if (!bubbleId || !pos || !isWsOpen()) return;
+  const key = `bubble-intro-${bubbleId}`;
+  const text = sessionStorage.getItem(key)?.trim();
+  if (!text) return;
+  sessionStorage.removeItem(key);
+  sendChat(text);
+}
+
+function syncNameInputs(value) {
+  for (const id of ["#display-name", "#display-name-map"]) {
+    const el = $(id);
+    if (el && el.value !== value) el.value = value;
   }
 }
 
 function setupIdentity() {
-  const input = $("#display-name");
-  if (!input) return;
-  $("#btn-save-name")?.addEventListener("click", () => saveName());
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      saveName();
-    }
-  });
-  input.addEventListener("blur", () => {
-    if (input.value.trim() !== myName) saveName();
+  for (const sel of ["#display-name", "#display-name-map"]) {
+    const input = $(sel);
+    if (!input) continue;
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        syncNameInputs(input.value);
+        saveName();
+      }
+    });
+    input.addEventListener("blur", () => {
+      syncNameInputs(input.value);
+      if (input.value.trim() !== myName) saveName();
+    });
+    input.addEventListener("input", () => syncNameInputs(input.value));
+  }
+  $("#btn-save-name")?.addEventListener("click", () => {
+    syncNameInputs($("#display-name")?.value || $("#display-name-map")?.value || "");
+    saveName();
   });
 }
 
 /* --- Chat room UI --- */
 
 function showWelcome() {
-  const panel = $("#chat-panel");
-  const thread = $("#chat-thread");
-  panel?.classList.add("chat-panel--idle");
-  thread?.setAttribute("hidden", "hidden");
-  $("#chat-composer")?.setAttribute("hidden", "hidden");
   clearReply();
   roomInitializedFor = null;
   historyLoadGeneration += 1;
   messageById.clear();
-  const messages = $("#messages");
-  if (messages) messages.innerHTML = "";
-  getComposerInput()?.setAttribute("disabled", "disabled");
-  $("#btn-send")?.setAttribute("disabled", "disabled");
-  setMediaButtonsEnabled(false);
-  $("#bubble-title").textContent = "Nearby bubbles";
-  updateRoomAvatar("Bubblle");
-  $("#bubble-expiry").textContent = "";
-  bubbleExpiresAtMs = null;
-  $("#online-count").textContent = "";
-  setConnDot("idle");
+  teardownChat();
 }
 
 function showThread() {
@@ -787,6 +823,7 @@ function connectWs() {
     setConnDot("ok", "Live");
     setStatus("", false);
     flushOutboundQueue();
+    flushPendingBubbleIntro();
   };
 
   socket.onclose = (ev) => {
@@ -1384,48 +1421,12 @@ function setupComposer() {
   });
 }
 
-async function submitCreateBubble(e) {
-  e.preventDefault();
-  const title = e.target.title.value.trim();
-  if (!title) return;
-
-  const btn = e.target.querySelector('button[type="submit"]');
-  if (btn) btn.disabled = true;
-  try {
-    if (!pos) {
-      await ensureLocation({ hint: "Allow location to create your bubble…" });
-    }
-    await saveName();
-    const res = await fetch("/api/bubbles/", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, latitude: pos.lat, longitude: pos.lng }),
-    });
-    if (!res.ok) {
-      return;
-    }
-    const b = await res.json();
-    window.location.href = `/bubble/${b.id}/`;
-  } catch {
-    /* location denied or network error — message already in browse panels */
-  } finally {
-    if (btn) btn.disabled = false;
-  }
-}
-
-function setupCreate() {
-  for (const sel of ["#create-form", "#create-form-home"]) {
-    $(sel)?.addEventListener("submit", submitCreateBubble);
-  }
-}
-
 async function refreshNearbyBubbles() {
   try {
     if (!pos) await ensureLocation({ hint: "Allow location to see nearby bubbles…" });
     await refreshSidebar();
   } catch {
-    /* hint shown in browse panels */
+    /* map onboarding shows errors */
   }
 }
 
@@ -1436,9 +1437,18 @@ async function main() {
   setupMessageReplies();
   setupComposer();
   setupMediaUpload();
-  setupCreate();
-  $("#btn-refresh-bubbles")?.addEventListener("click", refreshNearbyBubbles);
-  $("#btn-refresh-bubbles-home")?.addEventListener("click", refreshNearbyBubbles);
+
+  initMapHome({
+    isRoom: () => !!bubbleId,
+    hasPosition: () => !!pos,
+    getPosition: () => pos,
+    getNearbyBubbles: () => nearbyBubbles,
+    readCachedPosition,
+    onPosition: (p) => applyPosition(p, { quiet: true }),
+    startLocation,
+    ensureLocation,
+    saveName,
+  });
 
   if (bubbleId) {
     showThread();
@@ -1447,17 +1457,14 @@ async function main() {
   }
 
   startExpiryTicker();
-
-  // Request location immediately — do not wait on session/network first.
   startLocation();
 
   try {
     const session = await bootstrapSession();
     trackMyName(session.anonymous_name || cachedDisplayName());
-    const input = $("#display-name");
-    if (input && myName) input.value = myName;
+    if (myName) syncNameInputs(myName);
   } catch {
-    if (!pos) setBrowseEmpty("Session error — refresh.");
+    if (!pos && !bubbleId) showOnboarding("Session error — refresh the page.");
   }
 
   window.addEventListener("pagehide", () => {
