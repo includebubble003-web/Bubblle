@@ -83,7 +83,9 @@
 
 .chat-app {
   display: flex;
+  height: 100svh;
   height: 100dvh;
+  max-height: 100svh;
   max-height: 100dvh;
   overflow: hidden;
   color: var(--text);
@@ -672,8 +674,11 @@
 }
 
 /* --- Home browse --- */
-.chat-app--home .sidebar { display: none !important; }
 .chat-app--home #btn-drawer { display: none !important; }
+
+@media (max-width: 900px) {
+  .chat-app--home .sidebar { display: none !important; }
+}
 .chat-app--room .home-browse { display: none !important; }
 
 .chat-app--home .home-browse {
@@ -1305,8 +1310,8 @@ body.drawer-open {
     width: 100%;
   }
 
-  .chat-app--home .identity {
-    max-width: 46%;
+  .chat-app--home .map-identity-mini .identity {
+    max-width: 100%;
   }
 
   .composer-form .btn-send {

@@ -109,7 +109,10 @@ function ensureMap() {
   youRing.addTo(map);
   userMarker._ring = youRing;
 
-  setTimeout(() => map.invalidateSize(), 100);
+  requestAnimationFrame(() => {
+    map.invalidateSize();
+    setTimeout(() => map.invalidateSize(), 200);
+  });
   return map;
 }
 
@@ -213,7 +216,10 @@ export function hideOnboarding() {
   $("#onboarding")?.setAttribute("hidden", "hidden");
   $("#map-screen")?.classList.add("map-screen--ready");
   ensureMap();
-  setTimeout(() => map?.invalidateSize(), 150);
+  requestAnimationFrame(() => {
+    map?.invalidateSize();
+    setTimeout(() => map?.invalidateSize(), 250);
+  });
 }
 
 async function tryAutoStart() {

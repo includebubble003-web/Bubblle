@@ -1,11 +1,12 @@
 /* Map-first landing experience */
 
 .map-screen {
-  position: absolute;
-  inset: 0;
   display: none;
+  flex: 1;
   flex-direction: column;
-  z-index: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .chat-app--home .map-screen {
@@ -18,15 +19,14 @@
   display: none !important;
 }
 
-.chat-app--home .sidebar {
-  display: none !important;
-}
-
 .chat-app--home .chat-main {
   position: relative;
   flex: 1;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   min-width: 0;
+  overflow: hidden;
 }
 
 .chat-app--room .btn-back-map {
@@ -37,16 +37,72 @@
   display: none !important;
 }
 
+/* Home header — sits above map, not over it */
+.map-home-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  padding-top: max(10px, env(safe-area-inset-top));
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  background: rgba(18, 19, 24, 0.94);
+  backdrop-filter: blur(20px) saturate(1.2);
+  z-index: 20;
+}
+
+.map-home-brand {
+  flex-shrink: 0;
+}
+
+.map-home-bar .live-nearby-badge {
+  flex: 1;
+  min-width: 0;
+  justify-content: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.map-identity-mini {
+  flex-shrink: 0;
+  max-width: min(200px, 38vw);
+}
+
+.map-identity-mini .identity {
+  max-width: 100%;
+  padding: 5px 10px 5px 6px;
+}
+
+/* Map area fills remaining space below header */
+.map-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .map-container {
   flex: 1;
   width: 100%;
   min-height: 0;
+  height: 100%;
   background: #0b0c0f;
 }
 
 .map-container .leaflet-container {
+  width: 100% !important;
+  height: 100% !important;
   font-family: var(--font, "Inter", sans-serif);
   background: #0b0c0f;
+  z-index: 1;
+}
+
+.map-container .leaflet-control-zoom {
+  margin-bottom: calc(12px + env(safe-area-inset-bottom)) !important;
+  margin-right: 12px !important;
 }
 
 /* Onboarding */
@@ -143,25 +199,6 @@
   color: #f87171;
 }
 
-/* Map top overlay */
-.map-overlay-top {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 20;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: max(12px, env(safe-area-inset-top)) 14px 12px;
-  pointer-events: none;
-}
-
-.map-overlay-top > * {
-  pointer-events: auto;
-}
-
 .live-nearby-badge {
   display: inline-flex;
   align-items: center;
@@ -187,6 +224,7 @@
   height: 8px;
   border-radius: 50%;
   background: #6b7289;
+  flex-shrink: 0;
 }
 
 .live-nearby-badge[data-state="live"] .live-nearby-dot {
@@ -197,15 +235,6 @@
 
 @keyframes live-pulse {
   50% { opacity: 0.45; transform: scale(0.85); }
-}
-
-.map-identity-mini {
-  max-width: 200px;
-}
-
-.map-identity-mini .identity {
-  max-width: 200px;
-  padding: 5px 10px 5px 6px;
 }
 
 /* Empty state card */
@@ -224,6 +253,7 @@
   backdrop-filter: blur(16px);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
   animation: map-empty-in 0.4s ease-out;
+  pointer-events: auto;
 }
 
 @keyframes map-empty-in {
@@ -601,7 +631,6 @@ body.sheet-open {
   color: #f87171;
 }
 
-/* Back to map (room) */
 .btn-back-map {
   text-decoration: none;
   color: inherit;
@@ -616,13 +645,36 @@ body.sheet-open {
   position: relative;
 }
 
+/* Mobile: compact header, hide brand text */
+@media (max-width: 480px) {
+  .map-home-bar {
+    padding-left: 12px;
+    padding-right: 12px;
+    gap: 8px;
+  }
+
+  .map-home-brand .brand-name {
+    display: none;
+  }
+
+  .map-home-bar .live-nearby-badge {
+    font-size: 0.6875rem;
+    padding: 7px 10px;
+  }
+
+  .map-identity-mini {
+    max-width: min(160px, 34vw);
+  }
+}
+
+/* Desktop: sidebar + map split (same shell as chat room) */
 @media (min-width: 901px) {
-  .chat-app--home .map-screen {
-    border-radius: 0;
+  .chat-app--home .sidebar {
+    display: flex !important;
   }
 
   .map-fab {
     right: 28px;
-    bottom: 32px;
+    bottom: 28px;
   }
 }

@@ -29,20 +29,13 @@
   <div class="chat-main">
     <!-- Map-first landing (home) -->
     <section class="map-screen" id="map-screen" aria-label="Nearby conversations map">
-      <div id="onboarding" class="onboarding" hidden>
-        <div class="onboarding-card">
-          <div class="onboarding-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21s7-4.35 7-11a7 7 0 1 0-14 0c0 6.65 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/><path d="M8 14c1.5 1 2.5 2 4 2s2.5-1 4-2"/></svg>
-          </div>
-          <h1 class="onboarding-title">Bubblle</h1>
-          <p class="onboarding-lead">See and join anonymous conversations happening around you.</p>
-          <p class="onboarding-note">Location is only used to discover nearby bubbles. Your exact position is never shared in chat.</p>
-          <button type="button" class="btn-onboarding" id="btn-enable-location">Enable Location</button>
-          <p class="onboarding-error" id="onboarding-error" hidden></p>
-        </div>
-      </div>
-
-      <div class="map-overlay-top">
+      <header class="map-home-bar">
+        <a href="/" class="brand map-home-brand">
+          <span class="brand-mark" aria-hidden="true">
+            <svg class="icon icon-brand" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.75" opacity="0.5"/><circle cx="12" cy="12" r="5.5" fill="currentColor" opacity="0.95"/></svg>
+          </span>
+          <span class="brand-name">Bubblle</span>
+        </a>
         <div class="live-nearby-badge" id="map-live-count" data-state="idle">
           <span class="live-nearby-dot" aria-hidden="true"></span>
           <span class="live-nearby-text">Live nearby</span>
@@ -55,22 +48,37 @@
             <input id="display-name-map" class="identity-input" maxlength="64" autocomplete="nickname" placeholder="Your name" aria-label="Display name" />
           </div>
         </div>
+      </header>
+
+      <div class="map-body">
+        <div id="onboarding" class="onboarding" hidden>
+          <div class="onboarding-card">
+            <div class="onboarding-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21s7-4.35 7-11a7 7 0 1 0-14 0c0 6.65 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/><path d="M8 14c1.5 1 2.5 2 4 2s2.5-1 4-2"/></svg>
+            </div>
+            <h1 class="onboarding-title">Bubblle</h1>
+            <p class="onboarding-lead">See and join anonymous conversations happening around you.</p>
+            <p class="onboarding-note">Location is only used to discover nearby bubbles. Your exact position is never shared in chat.</p>
+            <button type="button" class="btn-onboarding" id="btn-enable-location">Enable Location</button>
+            <p class="onboarding-error" id="onboarding-error" hidden></p>
+          </div>
+        </div>
+
+        <div id="map" class="map-container" role="application" aria-label="Map of nearby bubbles"></div>
+
+        <div class="map-loading" id="map-loading" hidden aria-live="polite">
+          <div class="map-loading-shimmer" aria-hidden="true"></div>
+          <p class="map-loading-text">Locating you…</p>
+        </div>
+
+        <div class="map-empty-card" id="map-empty" hidden>
+          <p class="map-empty-title">No conversations nearby yet</p>
+          <p class="map-empty-lead">Start the first bubble around you.</p>
+          <button type="button" class="map-empty-create" id="map-empty-create">Create bubble</button>
+        </div>
+
+        <button type="button" class="map-fab" id="fab-create" aria-label="Create bubble">+</button>
       </div>
-
-      <div id="map" class="map-container" role="application" aria-label="Map of nearby bubbles"></div>
-
-      <div class="map-loading" id="map-loading" hidden aria-live="polite">
-        <div class="map-loading-shimmer" aria-hidden="true"></div>
-        <p class="map-loading-text">Locating you…</p>
-      </div>
-
-      <div class="map-empty-card" id="map-empty" hidden>
-        <p class="map-empty-title">No conversations nearby yet</p>
-        <p class="map-empty-lead">Start the first bubble around you.</p>
-        <button type="button" class="map-empty-create" id="map-empty-create">Create bubble</button>
-      </div>
-
-      <button type="button" class="map-fab" id="fab-create" aria-label="Create bubble">+</button>
     </section>
 
     <div id="sheet-backdrop" class="sheet-backdrop" hidden></div>
