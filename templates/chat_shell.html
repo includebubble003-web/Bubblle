@@ -150,24 +150,21 @@
 
     <!-- Chat room UI -->
     <header class="chat-topbar">
-      <div class="topbar-start">
-        <a href="/" class="btn-icon btn-back-map" id="btn-back-map" aria-label="Back to home" title="Home">
-          <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
-        </a>
-        <button type="button" class="btn-icon mobile-only" id="btn-drawer" aria-label="Open bubbles" aria-expanded="false" aria-controls="sidebar">
-          <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
-        </button>
+      <a href="/" class="btn-icon btn-back-map topbar-back" id="btn-back-map" aria-label="Back to home" title="Back">
+        <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
 
+      <div class="topbar-main">
         <div class="room-header" id="room-meta">
-          <div class="room-avatar" id="room-avatar" aria-hidden="true">{% if bubble_id %}#{% else %}B{% endif %}</div>
+          <div class="room-avatar topbar-desktop-only" id="room-avatar" aria-hidden="true">{% if bubble_id %}#{% else %}B{% endif %}</div>
           <div class="topbar-room">
             <div class="topbar-room-head">
               <h1 class="room-title" id="bubble-title">{% if bubble_id %}Chat{% else %}Bubblle{% endif %}</h1>
-              <span class="loc-pill topbar-loc-pill" id="loc-pill" data-state="idle" title="Location" aria-label="Location status">
+              <span class="loc-pill topbar-loc-pill topbar-desktop-only" id="loc-pill" data-state="idle" title="Location" aria-label="Location status">
                 <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-4.35 7-11a7 7 0 1 0-14 0c0 6.65 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
               </span>
             </div>
-            <div class="room-stats">
+            <div class="room-stats topbar-desktop-only">
               <span class="conn-badge" id="conn-badge" data-state="idle">
                 <span class="conn-dot" id="conn-dot" data-state="idle"></span>
                 <span class="conn-label" id="conn-label">Connecting</span>
@@ -179,7 +176,20 @@
         </div>
       </div>
 
-      <div class="topbar-end">
+      <div class="topbar-trailing topbar-mobile-only">
+        <span class="expiry-chip" id="bubble-expiry-chip" hidden aria-live="polite">
+          <span class="expiry-chip-icon" aria-hidden="true">⏱</span>
+          <span id="bubble-expiry-chip-text"></span>
+        </span>
+        <button type="button" class="btn-icon btn-room-menu" id="btn-room-menu" aria-label="Chat options" aria-haspopup="dialog" aria-controls="room-menu-sheet">
+          <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="5" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="19" r="1.5" fill="currentColor"/></svg>
+        </button>
+      </div>
+
+      <div class="topbar-end topbar-desktop-only">
+        <button type="button" class="btn-icon" id="btn-drawer" aria-label="Open bubbles" aria-expanded="false" aria-controls="sidebar">
+          <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
         <div class="identity" id="identity">
           <span class="identity-avatar" aria-hidden="true">
             <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
@@ -191,6 +201,59 @@
         </div>
       </div>
     </header>
+
+    <div id="room-menu-backdrop" class="sheet-backdrop room-menu-backdrop" hidden></div>
+    <div id="room-menu-sheet" class="bottom-sheet room-menu-sheet" hidden role="dialog" aria-labelledby="room-menu-title">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="sheet-header">
+        <div>
+          <h2 class="sheet-title" id="room-menu-title">Chat options</h2>
+          <p class="sheet-sub" id="room-menu-bubble-name"></p>
+        </div>
+        <button type="button" class="sheet-close btn-icon-only" id="room-menu-close" aria-label="Close">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <div class="room-menu-identity">
+        <label class="room-menu-label" for="display-name-menu">Your display name</label>
+        <div class="identity identity--menu">
+          <span class="identity-avatar" aria-hidden="true">
+            <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          </span>
+          <input id="display-name-menu" class="identity-input" maxlength="64" autocomplete="nickname" placeholder="Your name" aria-label="Display name" />
+          <button type="button" class="btn btn-ghost btn-sm btn-icon-only identity-save" id="btn-save-name-menu" title="Save name" aria-label="Save name">
+            <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>
+          </button>
+        </div>
+      </div>
+      <ul class="room-menu-list">
+        <li>
+          <button type="button" class="room-menu-item" id="room-menu-nearby">
+            <span class="room-menu-item-icon" aria-hidden="true">
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+            </span>
+            <span class="room-menu-item-body">
+              <span class="room-menu-item-title">Nearby bubbles</span>
+              <span class="room-menu-item-sub">Browse conversations around you</span>
+            </span>
+          </button>
+        </li>
+        <li class="room-menu-stat-row">
+          <span class="room-menu-stat">
+            <span class="room-menu-stat-label">Connection</span>
+            <span class="room-menu-stat-value" id="room-menu-conn">Connecting</span>
+          </span>
+          <span class="room-menu-stat">
+            <span class="room-menu-stat-label">Active</span>
+            <span class="room-menu-stat-value" id="room-menu-online">—</span>
+          </span>
+          <span class="room-menu-stat">
+            <span class="room-menu-stat-label">Expires</span>
+            <span class="room-menu-stat-value" id="room-menu-expiry">—</span>
+          </span>
+        </li>
+      </ul>
+    </div>
 
     <div class="chat-panel" id="chat-panel">
       <div class="chat-thread" id="chat-thread" {% if not bubble_id %}hidden{% endif %}>

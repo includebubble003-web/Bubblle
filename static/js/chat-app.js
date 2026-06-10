@@ -168,6 +168,15 @@ function fmtRemaining(sec) {
   return `${s}s`;
 }
 
+function fmtRemainingCompact(sec) {
+  if (sec <= 0) return "Ended";
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m`;
+  return `${sec}s`;
+}
+
 function remainingSecFromExpiresAt(expiresAt) {
   if (!expiresAt) return 0;
   const ms = new Date(expiresAt).getTime();
@@ -188,13 +197,25 @@ function setBubbleExpiryFromMeta(b) {
 
 function updateRoomExpiryDisplay() {
   const el = $("#bubble-expiry");
-  if (!el) return;
+  const chip = $("#bubble-expiry-chip");
+  const chipText = $("#bubble-expiry-chip-text");
+  const menuExpiry = $("#room-menu-expiry");
   if (!bubbleExpiresAtMs) {
-    el.textContent = "";
+    if (el) el.textContent = "";
+    if (chip) chip.hidden = true;
+    if (menuExpiry) menuExpiry.textContent = "—";
     return;
   }
   const sec = Math.max(0, Math.floor((bubbleExpiresAtMs - Date.now()) / 1000));
-  el.textContent = fmtRemaining(sec);
+  const compact = fmtRemainingCompact(sec);
+  const full = fmtRemaining(sec);
+  if (el) el.textContent = full;
+  if (chip && chipText) {
+    chipText.textContent = compact;
+    chip.hidden = false;
+    chip.title = `Expires in ${full}`;
+  }
+  if (menuExpiry) menuExpiry.textContent = compact;
   if (sec <= 0 && bubbleActive) {
     bubbleActive = false;
     allowReconnect = false;
@@ -473,7 +494,7 @@ function stopNearbyPolling() {
 /* --- Identity --- */
 
 function setIdentityError(hasError) {
-  for (const id of ["#display-name", "#display-name-map"]) {
+  for (const id of ["#display-name", "#display-name-map", "#display-name-menu"]) {
     const el = $(id);
     if (!el) continue;
     el.classList.toggle("identity-input-error", hasError);
@@ -481,7 +502,7 @@ function setIdentityError(hasError) {
 }
 
 async function saveName() {
-  const input = $("#display-name") || $("#display-name-map");
+  const input = $("#display-name") || $("#display-name-menu") || $("#display-name-map");
   if (!input) return;
   const trimmed = (input.value || "").trim();
   if (trimmed.length < 2) {
@@ -498,7 +519,7 @@ async function saveName() {
     if (previousName && previousName !== newName) {
       refreshChatIdentity(previousName, newName);
     }
-    for (const id of ["#display-name", "#display-name-map"]) {
+    for (const id of ["#display-name", "#display-name-map", "#display-name-menu"]) {
       const el = $(id);
       if (!el) continue;
       el.classList.add("identity-saved");
@@ -519,14 +540,14 @@ function flushPendingBubbleIntro() {
 }
 
 function syncNameInputs(value) {
-  for (const id of ["#display-name", "#display-name-map"]) {
+  for (const id of ["#display-name", "#display-name-map", "#display-name-menu"]) {
     const el = $(id);
     if (el && el.value !== value) el.value = value;
   }
 }
 
 function setupIdentity() {
-  for (const sel of ["#display-name", "#display-name-map"]) {
+  for (const sel of ["#display-name", "#display-name-map", "#display-name-menu"]) {
     const input = $(sel);
     if (!input) continue;
     input.addEventListener("keydown", (e) => {
@@ -542,10 +563,12 @@ function setupIdentity() {
     });
     input.addEventListener("input", () => syncNameInputs(input.value));
   }
-  $("#btn-save-name")?.addEventListener("click", () => {
-    syncNameInputs($("#display-name")?.value || $("#display-name-map")?.value || "");
-    saveName();
-  });
+  for (const id of ["#btn-save-name", "#btn-save-name-menu"]) {
+    $(id)?.addEventListener("click", () => {
+      syncNameInputs($("#display-name")?.value || $("#display-name-menu")?.value || $("#display-name-map")?.value || "");
+      saveName();
+    });
+  }
 }
 
 /* --- Chat room UI --- */
@@ -580,17 +603,33 @@ function refreshComposerAvailability() {
   }
 }
 
+function setOnlineCount(n) {
+  const text = typeof n === "number" ? `${n} active` : "";
+  const el = $("#online-count");
+  const menuEl = $("#room-menu-online");
+  if (el) el.textContent = text;
+  if (menuEl) menuEl.textContent = typeof n === "number" ? String(n) : "—";
+}
+
+function setRoomMenuTitle(title) {
+  const t = String(title || "").trim();
+  $("#room-menu-bubble-name").textContent = t || "Anonymous chat";
+}
+
 function setConnDot(state, title = "") {
   const labels = { idle: "Offline", loading: "Connecting…", ok: "Live", error: "Disconnected" };
   const el = $("#conn-dot");
   const badge = $("#conn-badge");
   const label = $("#conn-label");
+  const menuConn = $("#room-menu-conn");
+  const text = title || labels[state] || "";
   if (el) {
     el.dataset.state = state;
-    el.title = title || labels[state] || state;
+    el.title = text;
   }
   if (badge) badge.dataset.state = state;
-  if (label) label.textContent = title || labels[state] || state;
+  if (label) label.textContent = text;
+  if (menuConn) menuConn.textContent = text;
 }
 
 function setStatus(msg, show) {
@@ -866,7 +905,7 @@ function connectWs() {
       $("#typing").hidden = true;
     } else if (data.type === "presence") {
       const n = data.active_users ?? data.online;
-      if (typeof n === "number") $("#online-count").textContent = `${n} active`;
+      if (typeof n === "number") setOnlineCount(n);
     } else if (data.type === "typing") {
       const t = $("#typing");
       if (data.typing) {
@@ -1155,14 +1194,16 @@ function loadBubbleMeta() {
     .then((b) => {
       if (!b) {
         $("#bubble-title").textContent = "Not found";
+        setRoomMenuTitle("Not found");
         stopReconnecting("Bubble not found.");
         return;
       }
       $("#bubble-title").textContent = b.title;
+      setRoomMenuTitle(b.title);
       updateRoomAvatar(b.title);
       setBubbleExpiryFromMeta(b);
       const n = b.active_users ?? b.online_count;
-      if (typeof n === "number") $("#online-count").textContent = `${n} active`;
+      if (typeof n === "number") setOnlineCount(n);
       if (!b.active) {
         bubbleActive = false;
         allowReconnect = false;
@@ -1287,6 +1328,39 @@ function setDrawerOpen(open) {
     btn?.setAttribute("aria-expanded", "false");
     document.body.classList.remove("drawer-open");
   }
+}
+
+function setupRoomMenu() {
+  const sheet = $("#room-menu-sheet");
+  const backdrop = $("#room-menu-backdrop");
+  if (!sheet || !backdrop) return;
+
+  const open = () => {
+    setRoomMenuTitle($("#bubble-title")?.textContent || "");
+    syncNameInputs($("#display-name")?.value || $("#display-name-menu")?.value || myName || "");
+    sheet.removeAttribute("hidden");
+    backdrop.removeAttribute("hidden");
+    document.body.classList.add("sheet-open");
+  };
+
+  const close = () => {
+    sheet.setAttribute("hidden", "hidden");
+    backdrop.setAttribute("hidden", "hidden");
+    document.body.classList.remove("sheet-open");
+  };
+
+  $("#btn-room-menu")?.addEventListener("click", open);
+  $("#room-menu-close")?.addEventListener("click", close);
+  backdrop.addEventListener("click", close);
+
+  $("#room-menu-nearby")?.addEventListener("click", () => {
+    close();
+    setDrawerOpen(true);
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !sheet.hidden) close();
+  });
 }
 
 function setupDrawer() {
@@ -1441,6 +1515,7 @@ async function refreshNearbyBubbles() {
 
 async function main() {
   setupIdentity();
+  setupRoomMenu();
   setupDrawer();
   setupReplyComposer();
   setupMessageReplies();

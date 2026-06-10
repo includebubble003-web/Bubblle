@@ -71,7 +71,7 @@ class Command(BaseCommand):
             "--expires-hours",
             type=float,
             default=None,
-            help="Bubble lifetime in hours (default: BUBBLLE_DEMO_EXPIRES_SECONDS, usually 24h).",
+            help="Bubble lifetime in hours (default: BUBBLLE_DEMO_EXPIRES_SECONDS, usually 23 minutes).",
         )
 
     def handle(self, *args, **options):
@@ -92,7 +92,7 @@ class Command(BaseCommand):
             expires_seconds = int(options["expires_hours"] * 3600)
         else:
             expires_seconds = int(
-                getattr(settings, "BUBBLLE_DEMO_EXPIRES_SECONDS", 24 * 60 * 60)
+                getattr(settings, "BUBBLLE_DEMO_EXPIRES_SECONDS", 23 * 60)
             )
         expires_at = timezone.now() + timedelta(seconds=expires_seconds)
 
