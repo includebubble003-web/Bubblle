@@ -16,6 +16,7 @@ import {
   initMapHome,
   onMapBubblesUpdated,
   onMapPositionUpdate,
+  setHomeFeedLoading,
   showOnboarding,
 } from "./map-home.js";
 
@@ -427,6 +428,7 @@ function renderBubbleLists() {
 
 async function refreshSidebar() {
   if (!pos) return;
+  if (!bubbleId) setHomeFeedLoading(true);
   const params = new URLSearchParams({
     lat: String(pos.lat),
     lng: String(pos.lng),

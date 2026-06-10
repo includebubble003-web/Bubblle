@@ -675,10 +675,7 @@
 
 /* --- Home browse --- */
 .chat-app--home #btn-drawer { display: none !important; }
-
-@media (max-width: 900px) {
-  .chat-app--home .sidebar { display: none !important; }
-}
+.chat-app--home .sidebar { display: none !important; }
 .chat-app--room .home-browse { display: none !important; }
 
 .chat-app--home .home-browse {
