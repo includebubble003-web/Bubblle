@@ -17,6 +17,7 @@ const NEARBY_POLL_MS = 5000;
 const WS_RECONNECT_BASE_MS = 3000;
 const WS_RECONNECT_MAX_MS = 20000;
 const MSG_COOLDOWN_MS = 1000;
+const COMPOSER_MAX_HEIGHT_PX = 144;
 const MAX_IMAGE_INPUT_BYTES = 8 * 1024 * 1024;
 const MAX_IMAGE_DIMENSION = 1600;
 const IMAGE_JPEG_QUALITY = 0.85;
@@ -141,6 +142,7 @@ function setReplyTarget(m) {
   setComposerHint("");
   scrollComposerIntoView();
   input?.focus();
+  autoResizeComposer();
 }
 
 function clearReply() {
@@ -500,7 +502,7 @@ function showWelcome() {
   messageById.clear();
   const messages = $("#messages");
   if (messages) messages.innerHTML = "";
-  $("#chat-input")?.setAttribute("disabled", "disabled");
+  getComposerInput()?.setAttribute("disabled", "disabled");
   $("#btn-send")?.setAttribute("disabled", "disabled");
   setMediaButtonsEnabled(false);
   $("#bubble-title").textContent = "Nearby bubbles";
@@ -517,8 +519,9 @@ function showThread() {
   panel?.classList.remove("chat-panel--idle");
   thread?.removeAttribute("hidden");
   $("#chat-composer")?.removeAttribute("hidden");
-  $("#chat-input")?.removeAttribute("disabled");
+  getComposerInput()?.removeAttribute("disabled");
   refreshComposerAvailability();
+  autoResizeComposer();
 }
 
 function refreshComposerAvailability() {
@@ -613,7 +616,9 @@ function scrollMessages() {
   const scroller = $("#messages-scroll");
   if (!scroller) return;
   requestAnimationFrame(() => {
-    scroller.scrollTop = scroller.scrollHeight;
+    requestAnimationFrame(() => {
+      scroller.scrollTop = scroller.scrollHeight;
+    });
   });
 }
 
@@ -810,6 +815,7 @@ function connectWs() {
     }
     if (data.type === "chat") {
       appendMessage(data.payload);
+      if (isMyMessage(data.payload?.anonymous_name)) keepComposerFocus();
       lastSentReply = null;
       $("#typing").hidden = true;
     } else if (data.type === "presence") {
@@ -963,7 +969,7 @@ async function uploadChatImage(file) {
     startSendCooldown();
     lastSentReply = replySnapshot;
     clearReply();
-    if ($("#chat-input")) $("#chat-input").value = "";
+    if ($("#chat-input")) resetComposerInput({ keepFocus: true });
     appendMessage(msg);
   } catch (err) {
     removeMessageById(pendingId);
@@ -1012,6 +1018,64 @@ function setupMediaUpload() {
 
   galleryInput?.addEventListener("change", onPick);
   cameraInput?.addEventListener("change", onPick);
+}
+
+function getComposerInput() {
+  return $("#chat-input");
+}
+
+function autoResizeComposer() {
+  const el = getComposerInput();
+  if (!el) return;
+  el.style.height = "auto";
+  const next = Math.min(el.scrollHeight, COMPOSER_MAX_HEIGHT_PX);
+  el.style.height = `${next}px`;
+  el.style.overflowY = el.scrollHeight > COMPOSER_MAX_HEIGHT_PX ? "auto" : "hidden";
+}
+
+function resetComposerInput({ keepFocus = true } = {}) {
+  const el = getComposerInput();
+  if (!el) return;
+  el.value = "";
+  autoResizeComposer();
+  if (!keepFocus) return;
+  requestAnimationFrame(() => {
+    try {
+      el.focus({ preventScroll: true });
+    } catch {
+      el.focus();
+    }
+  });
+}
+
+function keepComposerFocus() {
+  const el = getComposerInput();
+  if (!el || el.disabled) return;
+  requestAnimationFrame(() => {
+    try {
+      el.focus({ preventScroll: true });
+    } catch {
+      el.focus();
+    }
+  });
+}
+
+function submitComposerMessage() {
+  const el = getComposerInput();
+  const text = el?.value.trim();
+  if (!text || !bubbleId) return;
+  if (!pos) {
+    setComposerHint("Waiting for location…", { kind: "info" });
+    return;
+  }
+  if (!bubbleActive) return;
+  if (isSendOnCooldown()) {
+    refreshCooldownUi();
+    return;
+  }
+  sendChat(text);
+  resetComposerInput({ keepFocus: true });
+  scrollMessages();
 }
 
 function sendChat(text) {
@@ -1275,24 +1339,24 @@ function setupMessageReplies() {
 /* --- Init --- */
 
 function setupComposer() {
-  $("#chat-form")?.addEventListener("submit", (e) => {
+  const input = getComposerInput();
+  const form = $("#chat-form");
+
+  form?.addEventListener("submit", (e) => {
     e.preventDefault();
-    const text = $("#chat-input")?.value.trim();
-    if (!text || !bubbleId) return;
-    if (!pos) {
-      setComposerHint("Waiting for location…");
-      return;
-    }
-    if (!bubbleActive) return;
-    if (isSendOnCooldown()) {
-      refreshCooldownUi();
-      return;
-    }
-    sendChat(text);
-    $("#chat-input").value = "";
+    submitComposerMessage();
   });
 
-  $("#chat-input")?.addEventListener("input", () => {
+  input?.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      submitComposerMessage();
+    }
+  });
+
+  input?.addEventListener("input", () => {
+    autoResizeComposer();
     if (!isWsOpen()) return;
     const now = Date.now();
     if (now - lastTypingSent > 2500) {
@@ -1310,6 +1374,12 @@ function setupComposer() {
       }
     }, 1600);
   });
+
+  autoResizeComposer();
+
+  const sendBtn = $("#btn-send");
+  sendBtn?.addEventListener("mousedown", (e) => e.preventDefault());
+  sendBtn?.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
 }
 
 async function submitCreateBubble(e) {

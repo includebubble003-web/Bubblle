@@ -1057,7 +1057,7 @@
 .composer-input-row {
   flex: 1;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 8px;
   min-width: 0;
   padding: 4px 6px 4px 4px;
@@ -1101,16 +1101,34 @@
   opacity: 0.35;
 }
 
-.composer-input-row input {
+.composer-input-row textarea,
+.composer-input-row .chat-input {
   flex: 1;
   min-width: 0;
+  width: 100%;
   padding: 10px 8px;
+  margin: 0;
   border: none;
   background: transparent;
   color: var(--text);
   font-family: var(--font);
   font-size: 0.9375rem;
+  line-height: 1.45;
   outline: none;
+  resize: none;
+  min-height: 24px;
+  max-height: 144px;
+  overflow-y: hidden;
+  field-sizing: content;
+}
+
+.composer-input-row textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.composer-input-row textarea:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .composer-form .btn-send {
