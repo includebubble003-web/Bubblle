@@ -271,11 +271,14 @@ function activeUsers(b) {
 /* --- Location (sidebar pill only — no sticky banner) --- */
 
 function setLocPill(state, title = "") {
-  const el = $("#loc-pill");
-  if (!el) return;
-  el.dataset.state = state;
   const titles = { idle: "Location", loading: "Locating…", ok: "Location on", error: "Location off" };
-  el.title = title || titles[state] || "";
+  const label = title || titles[state] || "";
+  for (const id of ["#loc-pill", "#loc-pill-sidebar"]) {
+    const el = $(id);
+    if (!el) continue;
+    el.dataset.state = state;
+    el.title = label;
+  }
 }
 
 function setBrowseEmpty(text) {
@@ -283,8 +286,17 @@ function setBrowseEmpty(text) {
     const el = $(sel);
     if (!el) continue;
     el.hidden = !text;
-    el.textContent = text || "";
+    const textEl = el.querySelector(".state-text");
+    if (textEl) textEl.textContent = text || "";
+    else el.textContent = text || "";
   }
+}
+
+function updateRoomAvatar(title) {
+  const el = $("#room-avatar");
+  if (!el) return;
+  const t = String(title || "").trim();
+  el.textContent = t ? t.charAt(0).toUpperCase() : "B";
 }
 
 function applyPosition(p, { quiet = false } = {}) {
@@ -351,15 +363,27 @@ async function ensureLocation({ hint = "Allow location to continue…" } = {}) {
 
 /* --- Sidebar --- */
 
+function bubbleInitial(title) {
+  const t = String(title || "?").trim();
+  return t ? t.charAt(0).toUpperCase() : "?";
+}
+
 function bubbleListItemHtml(b) {
   const isActive = bubbleId === b.id;
   const sec = b.expires_at ? remainingSecFromExpiresAt(b.expires_at) : (b.remaining_seconds ?? 0);
+  const count = activeUsers(b);
   return `<li class="sidebar-bubble${isActive ? " is-active" : ""}" data-bubble-id="${escapeHtml(b.id)}">
     <a href="/bubble/${b.id}/" class="sidebar-bubble-link">
-      <span class="sidebar-bubble-title">${escapeHtml(b.title)}</span>
-      <span class="sidebar-bubble-meta">
-        <span class="sidebar-bubble-count">${activeUsers(b)} active</span>
-        <span class="sidebar-bubble-expiry">${fmtRemaining(sec)}</span>
+      <span class="bubble-avatar" aria-hidden="true">${escapeHtml(bubbleInitial(b.title))}</span>
+      <span class="bubble-link-body">
+        <span class="sidebar-bubble-title">${escapeHtml(b.title)}</span>
+        <span class="sidebar-bubble-meta">
+          <span class="sidebar-bubble-expiry">${fmtRemaining(sec)}</span>
+        </span>
+      </span>
+      <span class="bubble-online-badge" title="${count} active">
+        <span class="bubble-online-dot" aria-hidden="true"></span>
+        <span class="sidebar-bubble-count">${count}</span>
       </span>
     </a>
   </li>`;
@@ -480,6 +504,7 @@ function showWelcome() {
   $("#btn-send")?.setAttribute("disabled", "disabled");
   setMediaButtonsEnabled(false);
   $("#bubble-title").textContent = "Nearby bubbles";
+  updateRoomAvatar("Bubblle");
   $("#bubble-expiry").textContent = "";
   bubbleExpiresAtMs = null;
   $("#online-count").textContent = "";
@@ -508,10 +533,16 @@ function refreshComposerAvailability() {
 }
 
 function setConnDot(state, title = "") {
+  const labels = { idle: "Offline", loading: "Connecting…", ok: "Live", error: "Disconnected" };
   const el = $("#conn-dot");
-  if (!el) return;
-  el.dataset.state = state;
-  el.title = title || state;
+  const badge = $("#conn-badge");
+  const label = $("#conn-label");
+  if (el) {
+    el.dataset.state = state;
+    el.title = title || labels[state] || state;
+  }
+  if (badge) badge.dataset.state = state;
+  if (label) label.textContent = title || labels[state] || state;
 }
 
 function setStatus(msg, show) {
@@ -1018,6 +1049,7 @@ function loadBubbleMeta() {
         return;
       }
       $("#bubble-title").textContent = b.title;
+      updateRoomAvatar(b.title);
       setBubbleExpiryFromMeta(b);
       const n = b.active_users ?? b.online_count;
       if (typeof n === "number") $("#online-count").textContent = `${n} active`;
@@ -1033,12 +1065,25 @@ function loadBubbleMeta() {
     .catch(() => {});
 }
 
+function createMessagesPlaceholder(text = "Loading messages…") {
+  const wrap = document.createElement("div");
+  wrap.className = "messages-placeholder state-panel";
+  wrap.id = "messages-placeholder";
+  wrap.innerHTML = `<div class="state-icon state-icon-pulse" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v6h-6"/></svg>
+  </div><p class="state-text muted">${escapeHtml(text)}</p>`;
+  return wrap;
+}
+
 function loadHistory() {
   if (!bubbleId) return;
+  const ph = $("#messages-placeholder");
+  const textEl = ph?.querySelector(".state-text");
+  if (textEl) textEl.textContent = "Loading messages…";
+  else if (ph) ph.textContent = "Loading messages…";
+
   const gen = ++historyLoadGeneration;
   const forBubble = bubbleId;
-  const ph = $("#messages-placeholder");
-  if (ph) ph.textContent = "Loading messages…";
 
   fetch(`/api/bubbles/${bubbleId}/messages/?limit=80`, { credentials: "include" })
     .then((res) => (res.ok ? res.json() : null))
@@ -1049,10 +1094,10 @@ function loadHistory() {
       wrap.innerHTML = "";
       messageById.clear();
       if (!data?.results?.length) {
-        const p = document.createElement("p");
-        p.className = "messages-placeholder muted";
-        p.textContent = "No messages yet — say hello!";
-        wrap.appendChild(p);
+        const empty = createMessagesPlaceholder("No messages yet — say hello!");
+        empty.querySelector(".state-icon")?.classList.remove("state-icon-pulse");
+        empty.querySelector(".state-text").textContent = "No messages yet — say hello!";
+        wrap.appendChild(empty);
         return;
       }
       for (const m of data.results) appendMessage(m, { scroll: false });
@@ -1098,11 +1143,7 @@ function onEnterBubble() {
   const messages = $("#messages");
   if (messages) {
     messages.innerHTML = "";
-    const ph = document.createElement("p");
-    ph.className = "messages-placeholder";
-    ph.id = "messages-placeholder";
-    ph.textContent = "Loading messages…";
-    messages.appendChild(ph);
+    messages.appendChild(createMessagesPlaceholder());
   }
   loadBubbleMeta();
   loadHistory();
