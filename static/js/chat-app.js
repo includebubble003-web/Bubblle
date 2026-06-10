@@ -1378,8 +1378,10 @@ function setupComposer() {
   autoResizeComposer();
 
   const sendBtn = $("#btn-send");
-  sendBtn?.addEventListener("mousedown", (e) => e.preventDefault());
-  sendBtn?.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
+  sendBtn?.addEventListener("click", (e) => {
+    e.preventDefault();
+    submitComposerMessage();
+  });
 }
 
 async function submitCreateBubble(e) {

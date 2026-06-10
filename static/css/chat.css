@@ -1136,7 +1136,9 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
+  flex-shrink: 0;
   min-width: 48px;
+  min-height: 48px;
   height: 48px;
   padding: 0 16px;
   border-radius: var(--radius-xl);
@@ -1146,8 +1148,18 @@
   font-family: var(--font);
   font-weight: 600;
   font-size: 0.875rem;
+  cursor: pointer;
   box-shadow: 0 4px 16px rgba(88, 101, 242, 0.35);
   transition: transform 0.12s, box-shadow 0.2s, opacity 0.12s;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  position: relative;
+  z-index: 2;
+}
+
+.composer-form .btn-send .icon,
+.composer-form .btn-send-label {
+  pointer-events: none;
 }
 
 .composer-form .btn-send:hover:not(:disabled) {
