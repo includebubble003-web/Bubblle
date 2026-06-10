@@ -38,10 +38,7 @@ from bubbles.models import Bubble, Message, ScheduledMessage
 
 
 class Command(BaseCommand):
-    help = (
-        "Create demo bubbles with recent chat + scheduled message batches "
-        "(5-20 msgs/day, no continuous AI spam)."
-    )
+    help = "Create 10 themed community bubbles with realistic Hinglish chat scripts."
 
     def add_arguments(self, parser):
         parser.add_argument("--lat", type=float, default=DEFAULT_LAT)
@@ -111,6 +108,7 @@ class Command(BaseCommand):
         total_initial = 0
         total_scheduled = 0
 
+        total = len(BUBBLE_TITLES)
         for i, title in enumerate(BUBBLE_TITLES):
             dlat = (i - 2) * (offset_km / 111.0)
             dlng = (i % 2) * (offset_km / (111.0 * max(0.5, abs(lat) / 90)))
@@ -146,7 +144,7 @@ class Command(BaseCommand):
 
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"  [{i + 1}/5] {title}\n"
+                    f"  [{i + 1}/{total}] {title}\n"
                     f"         id={bubble.id}\n"
                     f"         initial={initial}, scheduled={scheduled}, fake_online={online}\n"
                     f"         lat={bubble.latitude:.4f}, lng={bubble.longitude:.4f}"
