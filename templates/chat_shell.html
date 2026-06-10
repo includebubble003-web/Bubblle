@@ -1,18 +1,28 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Bubblle{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/chat.css' %}" />{% endblock %}
+{% block extra_css %}
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="{% static 'css/chat.css' %}" />
+{% endblock %}
 {% block body_class %}chat-body{% endblock %}
 {% block body %}
 <div class="chat-app {% if bubble_id %}chat-app--room{% else %}chat-app--home{% endif %}" id="chat-app">
   <div class="drawer-backdrop" id="drawer-backdrop" hidden aria-hidden="true"></div>
 
   <aside class="sidebar" id="sidebar" aria-label="Nearby bubbles">
-    <div class="sidebar-brand">
+    <div class="sidebar-header">
       <a href="/" class="brand">
-        <svg class="icon icon-brand" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.75" opacity="0.55"/><circle cx="12" cy="12" r="5.5" fill="currentColor" opacity="0.9"/></svg>
-        <span>Bubblle</span>
+        <span class="brand-mark" aria-hidden="true">
+          <svg class="icon icon-brand" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.75" opacity="0.5"/><circle cx="12" cy="12" r="5.5" fill="currentColor" opacity="0.95"/></svg>
+        </span>
+        <span class="brand-name">Bubblle</span>
       </a>
+      <span class="loc-pill sidebar-loc-pill" id="loc-pill-sidebar" data-state="idle" title="Location" aria-hidden="true">
+        <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-4.35 7-11a7 7 0 1 0-14 0c0 6.65 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+      </span>
     </div>
 
     <form id="create-form" class="sidebar-create">
@@ -24,62 +34,71 @@
     </form>
 
     <div class="sidebar-section-head">
-      <span>Within 5 km</span>
+      <span>Nearby · 5 km</span>
       <button type="button" class="btn btn-ghost btn-sm btn-icon-only" id="btn-refresh-bubbles" title="Refresh" aria-label="Refresh nearby bubbles">
         <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
       </button>
     </div>
 
     <ul class="sidebar-bubbles" id="sidebar-bubbles"></ul>
-    <p class="sidebar-empty muted" id="sidebar-empty">Getting location…</p>
+    <div class="sidebar-empty state-panel" id="sidebar-empty">
+      <div class="state-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      </div>
+      <p class="state-text muted">Getting location…</p>
+    </div>
   </aside>
 
   <div class="chat-main">
     <header class="chat-topbar">
-      <button
-        type="button"
-        class="btn-icon mobile-only"
-        id="btn-drawer"
-        aria-label="Open bubbles"
-        aria-expanded="false"
-        aria-controls="sidebar"
-      >
-        <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
-      </button>
+      <div class="topbar-start">
+        <button type="button" class="btn-icon mobile-only" id="btn-drawer" aria-label="Open bubbles" aria-expanded="false" aria-controls="sidebar">
+          <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
 
-      <div class="topbar-room" id="room-meta">
-        <div class="topbar-room-head">
-          <h1 class="room-title" id="bubble-title">{% if bubble_id %}Chat{% else %}Bubblle{% endif %}</h1>
-          <span class="loc-pill topbar-loc-pill" id="loc-pill" data-state="idle" title="Location" aria-label="Location status">
-            <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-4.35 7-11a7 7 0 1 0-14 0c0 6.65 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
-          </span>
-          <span class="conn-dot" id="conn-dot" data-state="idle" title="Chat connection"></span>
-        </div>
-        <div class="room-stats">
-          <span class="room-stat" id="bubble-expiry"></span>
-          <span class="room-stat room-stat-accent" id="online-count"></span>
+        <div class="room-header" id="room-meta">
+          <div class="room-avatar" id="room-avatar" aria-hidden="true">{% if bubble_id %}#{% else %}B{% endif %}</div>
+          <div class="topbar-room">
+            <div class="topbar-room-head">
+              <h1 class="room-title" id="bubble-title">{% if bubble_id %}Chat{% else %}Bubblle{% endif %}</h1>
+              <span class="loc-pill topbar-loc-pill" id="loc-pill" data-state="idle" title="Location" aria-label="Location status">
+                <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-4.35 7-11a7 7 0 1 0-14 0c0 6.65 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+              </span>
+            </div>
+            <div class="room-stats">
+              <span class="conn-badge" id="conn-badge" data-state="idle">
+                <span class="conn-dot" id="conn-dot" data-state="idle"></span>
+                <span class="conn-label" id="conn-label">Connecting</span>
+              </span>
+              <span class="room-stat" id="bubble-expiry"></span>
+              <span class="room-stat room-stat-accent" id="online-count"></span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="identity" id="identity">
-        <span class="identity-dot" aria-hidden="true"></span>
-        <input
-          id="display-name"
-          class="identity-input"
-          maxlength="64"
-          autocomplete="nickname"
-          placeholder="Your name"
-          aria-label="Display name"
-        />
-        <button type="button" class="btn btn-ghost btn-sm btn-icon-only identity-save" id="btn-save-name" title="Save name" aria-label="Save name">
-          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>
-        </button>
+      <div class="topbar-end">
+        <div class="identity" id="identity">
+          <span class="identity-avatar" aria-hidden="true">
+            <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          </span>
+          <input id="display-name" class="identity-input" maxlength="64" autocomplete="nickname" placeholder="Your name" aria-label="Display name" />
+          <button type="button" class="btn btn-ghost btn-sm btn-icon-only identity-save" id="btn-save-name" title="Save name" aria-label="Save name">
+            <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>
+          </button>
+        </div>
       </div>
     </header>
 
     <div class="chat-panel chat-panel--idle" id="chat-panel">
       <section class="home-browse" id="home-browse" aria-label="Nearby bubbles">
-        <p class="home-browse-lead muted">Join a bubble near you, or create one to start chatting.</p>
+        <div class="home-hero">
+          <div class="home-hero-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor" opacity="0.2"/></svg>
+          </div>
+          <h2 class="home-hero-title">Find your bubble</h2>
+          <p class="home-browse-lead muted">Join a chat near you, or create a new bubble to start talking.</p>
+        </div>
         <form id="create-form-home" class="home-create">
           <input name="title" maxlength="120" required placeholder="New bubble title…" />
           <button type="submit" class="btn btn-accent btn-block btn-with-icon" id="btn-create-home">
@@ -88,20 +107,30 @@
           </button>
         </form>
         <div class="home-section-head">
-          <span>Within 5 km</span>
+          <span>Nearby · 5 km</span>
           <button type="button" class="btn btn-ghost btn-sm btn-icon-only" id="btn-refresh-bubbles-home" title="Refresh" aria-label="Refresh nearby bubbles">
             <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
           </button>
         </div>
         <ul class="home-bubbles bubble-list" id="home-bubbles"></ul>
-        <p class="home-empty muted" id="home-empty">Getting location…</p>
+        <div class="home-empty state-panel" id="home-empty">
+          <div class="state-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          </div>
+          <p class="state-text muted">Getting location…</p>
+        </div>
       </section>
 
       <div class="chat-thread" id="chat-thread" hidden>
         <div id="chat-status" class="banner banner-warn thread-banner" hidden></div>
-        <div class="messages-scroll" id="messages-scroll">
+        <div class="messages-scroll chat-wallpaper" id="messages-scroll">
           <div class="messages-list" id="messages" aria-live="polite">
-            <p class="messages-placeholder" id="messages-placeholder">Loading messages…</p>
+            <div class="messages-placeholder state-panel" id="messages-placeholder">
+              <div class="state-icon state-icon-pulse" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v6h-6"/></svg>
+              </div>
+              <p class="state-text muted">Loading messages…</p>
+            </div>
           </div>
         </div>
       </div>
@@ -123,30 +152,16 @@
       </div>
       <form id="chat-form" class="composer-form">
         <div class="composer-input-row">
-          <button
-            type="button"
-            class="btn-icon composer-media-btn composer-media-btn--gallery"
-            id="btn-image-gallery"
-            title="Upload photo"
-            aria-label="Upload photo"
-            disabled
-          >
+          <button type="button" class="btn-icon composer-media-btn composer-media-btn--gallery" id="btn-image-gallery" title="Upload photo" aria-label="Upload photo" disabled>
             <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="8.5" cy="10.5" r="1.75"/><path d="M21 16l-5.2-5.2a1.8 1.8 0 0 0-2.5 0L7 17"/></svg>
           </button>
-          <button
-            type="button"
-            class="btn-icon composer-media-btn composer-media-btn--camera"
-            id="btn-image-camera"
-            title="Take photo"
-            aria-label="Take photo"
-            disabled
-          >
+          <button type="button" class="btn-icon composer-media-btn composer-media-btn--camera" id="btn-image-camera" title="Take photo" aria-label="Take photo" disabled>
             <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z"/><circle cx="12" cy="13" r="3.25"/></svg>
           </button>
-          <input id="chat-input" autocomplete="off" maxlength="2000" placeholder="Message…" disabled />
+          <input id="chat-input" autocomplete="off" maxlength="2000" placeholder="Type a message…" disabled />
         </div>
         <button class="btn btn-primary btn-send" type="submit" id="btn-send" disabled aria-label="Send message">
-          <svg class="icon icon-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+          <svg class="icon icon-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
           <span class="btn-send-label">Send</span>
         </button>
       </form>
