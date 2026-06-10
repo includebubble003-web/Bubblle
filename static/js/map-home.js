@@ -1,5 +1,5 @@
 /**
- * Conversation-first landing: compact map + bubble feed.
+ * Split-screen landing: compact discovery map + scrollable bubble feed.
  */
 import {
   formatGeolocationError,
@@ -11,9 +11,12 @@ let map = null;
 let userMarker = null;
 let markersLayer = null;
 const markerById = new Map();
+const bubbleById = new Map();
 let hooks = {};
-let mapExpanded = false;
 let feedLoading = false;
+let selectedBubbleId = null;
+let mapMoveTimer = null;
+let suppressMapMoveRefresh = false;
 
 function $(sel) {
   return document.querySelector(sel);
@@ -32,19 +35,6 @@ function fmtDistance(m) {
   if (!Number.isFinite(n)) return "—";
   if (n < 1000) return `${Math.round(n)} m`;
   return `${(n / 1000).toFixed(1)} km`;
-}
-
-function fmtRemaining(sec) {
-  if (sec <= 0) return "Ended";
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  if (m >= 60) {
-    const h = Math.floor(m / 60);
-    const rm = m % 60;
-    return `${h}h ${rm}m left`;
-  }
-  if (m > 0) return `${m}m left`;
-  return `${s}s left`;
 }
 
 function activeUsers(b) {
@@ -76,17 +66,18 @@ function isTrending(b, all) {
 }
 
 function markerSize(count) {
-  return Math.min(48, Math.max(30, 28 + count * 3));
+  return Math.min(44, Math.max(28, 26 + count * 3));
 }
 
-function bubbleIconHtml(b, trending, isNew = false) {
+function bubbleIconHtml(b, { trending = false, isNew = false, selected = false } = {}) {
   const count = activeUsers(b);
   const size = markerSize(count);
   const initial = bubbleInitial(b.title);
   const pulse = trending ? " map-marker-pulse" : "";
   const hot = count >= 3 ? " map-marker-hot" : "";
   const enter = isNew ? " map-marker-enter" : "";
-  return `<div class="map-marker${pulse}${hot}${enter}" style="--marker-size:${size}px" data-bubble-id="${escapeHtml(b.id)}">
+  const sel = selected ? " map-marker-selected" : "";
+  return `<div class="map-marker${pulse}${hot}${enter}${sel}" style="--marker-size:${size}px" data-bubble-id="${escapeHtml(b.id)}">
     <span class="map-marker-ring" aria-hidden="true"></span>
     <span class="map-marker-core">${escapeHtml(initial)}</span>
     <span class="map-marker-count">${count}</span>
@@ -101,6 +92,21 @@ function invalidateMapSoon() {
   });
 }
 
+function getMapCenter() {
+  if (!map) return null;
+  const c = map.getCenter();
+  return { lat: c.lat, lng: c.lng };
+}
+
+function scheduleDiscoveryRefresh() {
+  if (suppressMapMoveRefresh) return;
+  if (mapMoveTimer) clearTimeout(mapMoveTimer);
+  mapMoveTimer = setTimeout(() => {
+    const center = getMapCenter();
+    if (center) hooks.onDiscoveryCenterChange?.(center);
+  }, 450);
+}
+
 function ensureMap() {
   if (map) return map;
   const el = $("#map");
@@ -108,13 +114,15 @@ function ensureMap() {
 
   map = L.map(el, {
     zoomControl: false,
-    attributionControl: true,
+    attributionControl: false,
     dragging: true,
-    scrollWheelZoom: false,
+    scrollWheelZoom: true,
+    touchZoom: true,
+    doubleClickZoom: true,
   }).setView([20, 0], 2);
 
   L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-    attribution: '&copy; OSM &copy; CARTO',
+    attribution: "",
     subdomains: "abcd",
     maxZoom: 20,
   }).addTo(map);
@@ -142,8 +150,14 @@ function ensureMap() {
   youRing.addTo(map);
   userMarker._ring = youRing;
 
+  map.on("moveend", scheduleDiscoveryRefresh);
+
   invalidateMapSoon();
   return map;
+}
+
+export function getDiscoveryCenter() {
+  return getMapCenter() || hooks.getPosition?.() || null;
 }
 
 export function setMapUserPosition(pos) {
@@ -153,15 +167,51 @@ export function setMapUserPosition(pos) {
   const latlng = [pos.lat, pos.lng];
   userMarker.setLatLng(latlng);
   if (userMarker._ring) userMarker._ring.setLatLng(latlng);
+  $("#btn-map-recenter")?.removeAttribute("hidden");
   if (!map._userCentered) {
+    suppressMapMoveRefresh = true;
     map.setView(latlng, 15, { animate: false });
     map._userCentered = true;
+    setTimeout(() => {
+      suppressMapMoveRefresh = false;
+      hooks.onDiscoveryCenterChange?.({ lat: pos.lat, lng: pos.lng });
+    }, 100);
   }
+}
+
+function recenterOnUser() {
+  const pos = hooks.getPosition?.();
+  if (!pos || !map) return;
+  suppressMapMoveRefresh = true;
+  map.setView([pos.lat, pos.lng], map.getZoom(), { animate: true });
+  setTimeout(() => {
+    suppressMapMoveRefresh = false;
+    hooks.onDiscoveryCenterChange?.({ lat: pos.lat, lng: pos.lng });
+  }, 350);
+}
+
+function updateMarkerIcon(b, bubbles) {
+  const marker = markerById.get(b.id);
+  if (!marker) return;
+  const size = markerSize(activeUsers(b));
+  const icon = L.divIcon({
+    className: "map-marker-wrap",
+    html: bubbleIconHtml(b, {
+      trending: isTrending(b, bubbles),
+      selected: selectedBubbleId === b.id,
+    }),
+    iconSize: [size, size + 10],
+    iconAnchor: [size / 2, size / 2 + 5],
+  });
+  marker.setIcon(icon);
 }
 
 function syncMapMarkers(bubbles) {
   ensureMap();
   if (!map || !markersLayer) return;
+
+  bubbleById.clear();
+  for (const b of bubbles) bubbleById.set(b.id, b);
 
   const nextIds = new Set(bubbles.map((b) => b.id));
   for (const [id, marker] of markerById) {
@@ -172,12 +222,15 @@ function syncMapMarkers(bubbles) {
   }
 
   for (const b of bubbles) {
-    const trending = isTrending(b, bubbles);
     const isNew = !markerById.has(b.id);
     const size = markerSize(activeUsers(b));
     const icon = L.divIcon({
       className: "map-marker-wrap",
-      html: bubbleIconHtml(b, trending, isNew),
+      html: bubbleIconHtml(b, {
+        trending: isTrending(b, bubbles),
+        isNew,
+        selected: selectedBubbleId === b.id,
+      }),
       iconSize: [size, size + 10],
       iconAnchor: [size / 2, size / 2 + 5],
     });
@@ -188,30 +241,70 @@ function syncMapMarkers(bubbles) {
       marker.setIcon(icon);
     } else {
       marker = L.marker(latlng, { icon }).addTo(markersLayer);
-      marker.on("click", () => {
-        window.location.href = bubbleHref(b.id);
+      marker.on("click", (e) => {
+        L.DomEvent.stopPropagation(e);
+        selectBubble(b.id, { scroll: true, pan: true });
       });
       markerById.set(b.id, marker);
     }
   }
 
+  if (selectedBubbleId && !nextIds.has(selectedBubbleId)) {
+    selectBubble(null);
+  }
+
   updateLiveBadge(bubbles);
+}
+
+export function selectBubble(id, { scroll = false, pan = false } = {}) {
+  selectedBubbleId = id || null;
+
+  document.querySelectorAll(".bubble-card").forEach((el) => {
+    el.classList.toggle("bubble-card--selected", el.dataset.bubbleId === selectedBubbleId);
+  });
+
+  const bubbles = hooks.getNearbyBubbles?.() || [];
+  for (const b of bubbles) updateMarkerIcon(b, bubbles);
+
+  if (!selectedBubbleId) return;
+
+  if (scroll) {
+    const card = document.querySelector(`.bubble-card[data-bubble-id="${selectedBubbleId}"]`);
+    card?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  if (pan && map) {
+    const b = bubbleById.get(selectedBubbleId);
+    if (b) {
+      suppressMapMoveRefresh = true;
+      map.panTo([b.latitude, b.longitude], { animate: true, duration: 0.35 });
+      setTimeout(() => {
+        suppressMapMoveRefresh = false;
+      }, 400);
+    }
+  }
 }
 
 function bubbleCardHtml(b, { compact = false } = {}) {
   const count = activeUsers(b);
   const live = count > 0;
   const trending = isTrending(b, hooks.getNearbyBubbles?.() || []);
+  const selected = selectedBubbleId === b.id;
   const cls = [
     "bubble-card",
     compact ? "bubble-card--compact" : "",
     live ? "bubble-card--live" : "",
     trending ? "bubble-card--trending" : "",
+    selected ? "bubble-card--selected" : "",
   ]
     .filter(Boolean)
     .join(" ");
 
-  return `<a href="${bubbleHref(b.id)}" class="${cls}" data-bubble-id="${escapeHtml(b.id)}">
+  const joinBtn = compact
+    ? `<a href="${bubbleHref(b.id)}" class="bubble-card-join bubble-card-join--sm">Join</a>`
+    : `<a href="${bubbleHref(b.id)}" class="bubble-card-join">Join</a>`;
+
+  return `<article class="${cls}" data-bubble-id="${escapeHtml(b.id)}" tabindex="0" role="button" aria-label="${escapeHtml(b.title || "Bubble")}">
     <span class="bubble-card-avatar" aria-hidden="true">${escapeHtml(bubbleInitial(b.title))}</span>
     <span class="bubble-card-body">
       <span class="bubble-card-title">${escapeHtml(b.title || "Bubble")}</span>
@@ -221,9 +314,10 @@ function bubbleCardHtml(b, { compact = false } = {}) {
         <span class="bubble-card-stat bubble-card-stat--activity">${escapeHtml(fmtLastActivity(b))}</span>
       </span>
     </span>
-    ${live ? '<span class="bubble-card-live-dot" aria-label="Active now"></span>' : ""}
+    ${live ? '<span class="bubble-card-live-dot" aria-hidden="true"></span>' : ""}
     ${trending ? '<span class="bubble-card-badge">Hot</span>' : ""}
-  </a>`;
+    ${joinBtn}
+  </article>`;
 }
 
 function sortByDistance(bubbles) {
@@ -235,6 +329,22 @@ function sortByActivity(bubbles) {
     const act = activeUsers(b) - activeUsers(a);
     if (act !== 0) return act;
     return (a.distance_m ?? 0) - (b.distance_m ?? 0);
+  });
+}
+
+function bindFeedCardEvents(root) {
+  root?.querySelectorAll(".bubble-card").forEach((card) => {
+    card.addEventListener("click", (e) => {
+      if (e.target.closest(".bubble-card-join")) return;
+      e.preventDefault();
+      selectBubble(card.dataset.bubbleId, { scroll: false, pan: true });
+    });
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        selectBubble(card.dataset.bubbleId, { scroll: false, pan: true });
+      }
+    });
   });
 }
 
@@ -263,7 +373,7 @@ function renderBubbleFeed(bubbles) {
 
   const countEl = $("#feed-nearby-count");
   if (countEl) {
-    countEl.textContent = nearby.length ? `${nearby.length} within 5 km` : "";
+    countEl.textContent = nearby.length ? `${nearby.length} in this area` : "";
   }
 
   if (trendingEl) {
@@ -271,6 +381,7 @@ function renderBubbleFeed(bubbles) {
     if (trending.length) {
       section?.removeAttribute("hidden");
       trendingEl.innerHTML = trending.map((b) => bubbleCardHtml(b, { compact: true })).join("");
+      bindFeedCardEvents(trendingEl);
     } else {
       section?.setAttribute("hidden", "hidden");
       trendingEl.innerHTML = "";
@@ -282,6 +393,7 @@ function renderBubbleFeed(bubbles) {
     if (recent.length) {
       section?.removeAttribute("hidden");
       recentEl.innerHTML = recent.map((b) => bubbleCardHtml(b)).join("");
+      bindFeedCardEvents(recentEl);
     } else {
       section?.setAttribute("hidden", "hidden");
       recentEl.innerHTML = "";
@@ -293,10 +405,17 @@ function renderBubbleFeed(bubbles) {
     if (nearby.length) {
       section?.removeAttribute("hidden");
       nearbyEl.innerHTML = nearby.map((b) => bubbleCardHtml(b)).join("");
+      bindFeedCardEvents(nearbyEl);
     } else {
       section?.setAttribute("hidden", "hidden");
       nearbyEl.innerHTML = "";
     }
+  }
+
+  if (selectedBubbleId) {
+    document.querySelectorAll(".bubble-card").forEach((el) => {
+      el.classList.toggle("bubble-card--selected", el.dataset.bubbleId === selectedBubbleId);
+    });
   }
 
   const showEmpty = nearby.length === 0;
@@ -397,21 +516,12 @@ function openCreateSheet() {
   const input = $("#create-bubble-title");
   if (input) {
     input.value = "";
-    $("#create-bubble-desc").value = "";
+    const desc = $("#create-bubble-desc");
+    if (desc) desc.value = "";
     setTimeout(() => input.focus(), 200);
   }
   $("#create-sheet-error")?.setAttribute("hidden", "hidden");
   openSheet("#create-sheet");
-}
-
-function setMapExpanded(expanded) {
-  mapExpanded = expanded;
-  const wrap = $("#home-map-wrap");
-  wrap?.classList.toggle("home-map-wrap--expanded", expanded);
-  document.body.classList.toggle("map-expanded", expanded);
-  $("#btn-map-expand")?.toggleAttribute("hidden", expanded);
-  $("#btn-map-collapse")?.toggleAttribute("hidden", !expanded);
-  invalidateMapSoon();
 }
 
 function setupMapUi() {
@@ -430,14 +540,9 @@ function setupMapUi() {
     }
   });
 
-  $("#btn-map-expand")?.addEventListener("click", () => setMapExpanded(true));
-  $("#btn-map-collapse")?.addEventListener("click", () => setMapExpanded(false));
-
-  $("#home-map-wrap")?.addEventListener("click", (e) => {
-    if (mapExpanded) return;
-    if (e.target.closest(".map-expand-btn, .map-collapse-btn, .leaflet-control")) return;
-    if (e.target.closest(".leaflet-marker-icon, .map-marker-wrap")) return;
-    setMapExpanded(true);
+  $("#btn-map-recenter")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    recenterOnUser();
   });
 
   $("#sheet-backdrop")?.addEventListener("click", closeAllSheets);
@@ -500,10 +605,7 @@ function setupMapUi() {
   });
 
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      if (mapExpanded) setMapExpanded(false);
-      else closeAllSheets();
-    }
+    if (e.key === "Escape") closeAllSheets();
   });
 }
 

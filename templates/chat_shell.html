@@ -50,8 +50,8 @@
         </div>
       </header>
 
-      <div class="home-scroll" id="home-scroll">
-        <div id="onboarding" class="onboarding onboarding--inline" hidden>
+      <div class="home-split" id="home-split">
+        <div id="onboarding" class="onboarding onboarding--overlay" hidden>
           <div class="onboarding-card">
             <div class="onboarding-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21s7-4.35 7-11a7 7 0 1 0-14 0c0 6.65 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
@@ -63,57 +63,60 @@
           </div>
         </div>
 
-        <div class="home-map-wrap" id="home-map-wrap">
-          <div id="map" class="map-container" role="application" aria-label="Map of nearby bubbles"></div>
-          <div class="map-loading" id="map-loading" hidden aria-live="polite">
-            <div class="map-loading-shimmer" aria-hidden="true"></div>
+        <div class="home-map-pane" id="home-map-pane">
+          <div class="home-map-wrap" id="home-map-wrap">
+            <div id="map" class="map-container" role="application" aria-label="Map of nearby bubbles"></div>
+            <div class="map-loading" id="map-loading" hidden aria-live="polite">
+              <div class="map-loading-shimmer" aria-hidden="true"></div>
+            </div>
+            <button type="button" class="map-recenter-btn" id="btn-map-recenter" hidden aria-label="Recenter on my location" title="My location">
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+            </button>
           </div>
-          <button type="button" class="map-expand-btn" id="btn-map-expand" aria-label="Expand map">
-            <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
-            <span>Expand map</span>
-          </button>
-          <button type="button" class="map-collapse-btn" id="btn-map-collapse" hidden aria-label="Close map">
-            <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
-          </button>
         </div>
 
-        <div class="home-feed" id="home-feed">
-          <div class="feed-loading" id="feed-loading" hidden>
-            <div class="bubble-card-skeleton"></div>
-            <div class="bubble-card-skeleton"></div>
-            <div class="bubble-card-skeleton"></div>
-          </div>
+        <div class="home-feed-pane" id="home-feed-scroll">
+          <div class="home-feed-panel">
+            <div class="home-feed-handle" aria-hidden="true"></div>
+            <div class="home-feed" id="home-feed">
+              <div class="feed-loading" id="feed-loading" hidden>
+                <div class="bubble-card-skeleton"></div>
+                <div class="bubble-card-skeleton"></div>
+                <div class="bubble-card-skeleton"></div>
+              </div>
 
-          <section class="feed-section" id="feed-trending-section" hidden>
-            <div class="feed-section-head">
-              <h2 class="feed-section-title">🔥 Trending</h2>
-              <span class="feed-section-sub">People chatting now</span>
-            </div>
-            <div class="feed-trending-row" id="feed-trending"></div>
-          </section>
+              <section class="feed-section" id="feed-trending-section" hidden>
+                <div class="feed-section-head">
+                  <h2 class="feed-section-title">Trending</h2>
+                  <span class="feed-section-sub">People chatting now</span>
+                </div>
+                <div class="feed-trending-row" id="feed-trending"></div>
+              </section>
 
-          <section class="feed-section" id="feed-recent-section" hidden>
-            <div class="feed-section-head">
-              <h2 class="feed-section-title">Recently active</h2>
-            </div>
-            <div class="feed-card-list" id="feed-recent"></div>
-          </section>
+              <section class="feed-section" id="feed-recent-section" hidden>
+                <div class="feed-section-head">
+                  <h2 class="feed-section-title">Recently active</h2>
+                </div>
+                <div class="feed-card-list" id="feed-recent"></div>
+              </section>
 
-          <section class="feed-section" id="feed-nearby-section">
-            <div class="feed-section-head">
-              <h2 class="feed-section-title">Nearby bubbles</h2>
-              <span class="feed-section-sub" id="feed-nearby-count"></span>
-            </div>
-            <div class="feed-card-list" id="feed-nearby"></div>
-          </section>
+              <section class="feed-section" id="feed-nearby-section">
+                <div class="feed-section-head">
+                  <h2 class="feed-section-title">Nearby bubbles</h2>
+                  <span class="feed-section-sub" id="feed-nearby-count"></span>
+                </div>
+                <div class="feed-card-list" id="feed-nearby"></div>
+              </section>
 
-          <div class="home-empty" id="home-empty" hidden>
-            <div class="home-empty-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>
+              <div class="home-empty" id="home-empty" hidden>
+                <div class="home-empty-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>
+                </div>
+                <p class="home-empty-title">No conversations nearby yet</p>
+                <p class="home-empty-lead">Pan the map or start the first bubble around you.</p>
+                <button type="button" class="home-empty-create" id="home-empty-create">Create bubble</button>
+              </div>
             </div>
-            <p class="home-empty-title">No conversations nearby yet</p>
-            <p class="home-empty-lead">Start the first bubble around you and invite others to join.</p>
-            <button type="button" class="home-empty-create" id="home-empty-create">Create bubble</button>
           </div>
         </div>
       </div>

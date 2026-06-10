@@ -36,6 +36,7 @@ const bubbleId = (window.__BUBBLE_ID__ || "").trim() || null;
 let myName = "";
 const myPreviousNames = new Set();
 let pos = null;
+let discoveryCenter = null;
 let stopLocation = null;
 let nearbyPollTimer = null;
 let nearbyBubbles = [];
@@ -305,6 +306,7 @@ function updateRoomAvatar(title) {
 
 function applyPosition(p, { quiet = false } = {}) {
   pos = p;
+  if (!discoveryCenter) discoveryCenter = { lat: p.lat, lng: p.lng };
   $("#f-lat").value = String(p.lat);
   $("#f-lng").value = String(p.lng);
   setLocPill("ok");
@@ -426,12 +428,17 @@ function renderBubbleLists() {
   updateBubbleExpiryDisplays();
 }
 
+function getSearchCoords() {
+  return discoveryCenter || pos;
+}
+
 async function refreshSidebar() {
-  if (!pos) return;
+  const center = bubbleId ? pos : getSearchCoords();
+  if (!center) return;
   if (!bubbleId) setHomeFeedLoading(true);
   const params = new URLSearchParams({
-    lat: String(pos.lat),
-    lng: String(pos.lng),
+    lat: String(center.lat),
+    lng: String(center.lng),
     search_radius_m: String(SEARCH_RADIUS_M),
   });
   try {
@@ -452,7 +459,7 @@ async function refreshSidebar() {
 function startNearbyPolling() {
   stopNearbyPolling();
   nearbyPollTimer = setInterval(() => {
-    if (pos && document.visibilityState !== "hidden") refreshSidebar();
+    if (getSearchCoords() && document.visibilityState !== "hidden") refreshSidebar();
   }, NEARBY_POLL_MS);
 }
 
@@ -1447,6 +1454,10 @@ async function main() {
     getNearbyBubbles: () => nearbyBubbles,
     readCachedPosition,
     onPosition: (p) => applyPosition(p, { quiet: true }),
+    onDiscoveryCenterChange: (center) => {
+      discoveryCenter = center;
+      refreshSidebar();
+    },
     startLocation,
     ensureLocation,
     saveName,
