@@ -28,6 +28,14 @@ from bubbles.demo_content import (
     pick_bot_identities,
     topic_for_bubble,
 )
+from bubbles.ai_activity import (
+    generate_openai_batch,
+    has_daily_quota,
+    human_recently_active,
+    queue_scheduled_messages,
+    release_due_scheduled_messages,
+    unreleased_scheduled_count,
+)
 
 logger = logging.getLogger("bubbles.demo_agents")
 
@@ -141,8 +149,10 @@ class AgentConfig:
     max_replies_per_message: int = 1
     bots_per_bubble: int = 1
     poll_seconds: float = 30.0
+    release_poll_seconds: float = 45.0
     history_lines: int = 12
     verbose: bool = True
+    reactive_reply_enabled: bool = False
 
 
 @dataclass
@@ -381,6 +391,16 @@ class ChatAgent:
         if author == self.name:
             return
 
+        # Cost control: do not reply to every human message by default.
+        if not self.config.reactive_reply_enabled:
+            return
+
+        if human_recently_active(self.bubble_id):
+            return
+
+        if not has_daily_quota(self.bubble_id):
+            return
+
         pick = pick_repliers(pool, author, msg_id, self.config.max_replies_per_message)
         if self not in pick:
             return
@@ -426,6 +446,86 @@ class ChatAgent:
 def load_demo_bubbles() -> list[BubbleAgentSpec]:
     """Alias for management commands."""
     return load_demo_bubble_specs()
+
+
+async def _maybe_openai_refill(bubble_id: str, title: str, config: AgentConfig) -> None:
+    """Background one-shot batch generation when queue runs dry (max 1/day/bubble)."""
+    from asgiref.sync import sync_to_async
+    from django.db import close_old_connections
+
+    if human_recently_active(bubble_id) or not has_daily_quota(bubble_id, need=5):
+        return
+    try:
+        lines = await generate_openai_batch(title, bubble_id)
+    except Exception as exc:
+        logger.warning("OpenAI batch refill failed for %s: %s", bubble_id[:8], exc)
+        return
+
+    @sync_to_async
+    def _queue():
+        close_old_connections()
+        from bubbles.models import Bubble
+
+        bubble = Bubble.objects.filter(id=bubble_id, active=True).first()
+        if not bubble or not bubble.is_joinable():
+            return
+        queue_scheduled_messages(bubble, lines)
+
+    await _queue()
+    if config.verbose:
+        logger.info("OpenAI batch refill queued %s lines → %s", len(lines), bubble_id[:8])
+
+
+async def _scheduled_release_loop_v2(config: AgentConfig, started: set[str]) -> None:
+    """Poll all started bubbles for due scheduled messages."""
+    from asgiref.sync import sync_to_async
+    from django.core.cache import cache
+    from django.db import close_old_connections
+    from django.utils import timezone
+
+    while True:
+        await asyncio.sleep(config.release_poll_seconds)
+        for bubble_id in list(started):
+            try:
+
+                @sync_to_async
+                def _release(bid: str = bubble_id) -> int:
+                    close_old_connections()
+                    return len(release_due_scheduled_messages(bid))
+
+                n = await _release()
+                if n and config.verbose:
+                    logger.info("Released %s scheduled msg(s) → %s", n, bubble_id[:8])
+
+                @sync_to_async
+                def _needs_refill(bid: str = bubble_id) -> bool:
+                    close_old_connections()
+                    if unreleased_scheduled_count(bid) > 5:
+                        return False
+                    if human_recently_active(bid) or not has_daily_quota(bid, need=5):
+                        return False
+                    return True
+
+                if not await _needs_refill():
+                    continue
+                day_key = f"ai:batch:refill:{bubble_id}:{timezone.now().date().isoformat()}"
+                if cache.get(day_key):
+                    continue
+                cache.set(day_key, "1", timeout=60 * 60 * 26)
+
+                @sync_to_async
+                def _title(bid: str = bubble_id) -> str:
+                    close_old_connections()
+                    from bubbles.models import Bubble
+
+                    b = Bubble.objects.filter(id=bid).only("title").first()
+                    return b.title if b else ""
+
+                title = await _title()
+                if title:
+                    await _maybe_openai_refill(bubble_id, title, config)
+            except Exception as exc:
+                logger.error("release loop error %s: %s", bubble_id[:8], exc)
 
 
 async def _start_bubble_agents(
@@ -507,4 +607,5 @@ async def run_all_agents(
                 logger.error("bubble poll failed: %s", exc)
 
     tasks.append(asyncio.create_task(poll_new_bubbles()))
+    tasks.append(asyncio.create_task(_scheduled_release_loop_v2(config, started)))
     await asyncio.gather(*tasks)

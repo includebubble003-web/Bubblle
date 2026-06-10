@@ -298,3 +298,80 @@ def build_archetype_system_prompt(
     return (
         f"Tu '{name}' hai — normal desi group chat user. {common}"
     )
+
+
+# --- Reusable conversation starters (no LLM needed for most activity) ---
+
+STARTER_LIBRARY: dict[str, list[str]] = {
+    "questions": [
+        "Genuine question — kya try kiya tumne is area mein?",
+        "Opinion poll: overrated ya underrated?",
+        "Koi local hidden gem batao na 👀",
+        "First time visitors ke liye ek tip?",
+        "Budget friendly option kya hai realistically?",
+        "Weekday vs weekend — kab jana better?",
+        "Solo safe hai ya group chahiye?",
+        "Best time of day to go?",
+        "Veg options decent milte hain?",
+        "Crowd ka scene kaisa rehta hai?",
+    ],
+    "jokes": [
+        "Mood: hungry, broke, and hopeful — classic combo 😂",
+        "Main yahan suggestions lene aaya, decisions lene nahi.",
+        "GPS bol raha hai 'recalculating' — story of my life.",
+        "Plan A fail, Plan B snack.",
+        "Confidence: 100%. Planning: 0%.",
+    ],
+    "recommendations": [
+        "Try the small stall with a queue — usually worth it.",
+        "Skip the fancy place once, try the local spot.",
+        "If spice level scary lag raha hai, 'medium' bolo 😅",
+        "Cash handy rakho — some places UPI drama karte hain.",
+        "Evening time vibe alag hota hai, worth checking.",
+    ],
+    "polls": [
+        "Team A or Team B? Comment below.",
+        "Vote: cheap & good vs fancy & pricey?",
+        "Chai team ☕ vs coffee team?",
+        "Indoor chill vs outdoor walk?",
+        "Street food vs sit-down restaurant?",
+    ],
+    "icebreakers": [
+        "Anyone around here right now?",
+        "Room quiet hai — koi alive hai? 😄",
+        "Drop one rec, I'll try this week.",
+        "New here — what's good nearby?",
+        "Late night thoughts thread 🌙",
+        "Quick rant: what's overrated in this city?",
+        "Good news / bad news — go.",
+        "What brought you to this bubble?",
+    ],
+}
+
+
+def remix_conversation_lines(bubble_index: int, count: int) -> list[str]:
+    """Pull and lightly shuffle lines from the demo script + starter library."""
+    import random
+
+    rng = random.Random(f"remix:{bubble_index}")
+    script = CONVERSATIONS[bubble_index % len(CONVERSATIONS)]
+    lines = [text for _, text in script]
+    for items in STARTER_LIBRARY.values():
+        lines.extend(items)
+    rng.shuffle(lines)
+    seen: set[str] = set()
+    out: list[str] = []
+    for line in lines:
+        if line in seen:
+            continue
+        seen.add(line)
+        out.append(line)
+        if len(out) >= count:
+            break
+    return out
+
+
+def pick_cycle_authors(bubble_id: str, users: list[str], count: int) -> list[str]:
+    """Scheduled lines use the AI persona so they don't block human-quiet detection."""
+    bot_name = pick_bot_identities(bubble_id, 1)[0][0]
+    return [bot_name] * count

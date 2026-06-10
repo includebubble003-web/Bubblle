@@ -81,6 +81,7 @@ class Command(BaseCommand):
             reply_delay_min=float(settings.BUBBLLE_AI_REPLY_DELAY_MIN),
             reply_delay_max=float(settings.BUBBLLE_AI_REPLY_DELAY_MAX),
             reply_min_gap=float(settings.BUBBLLE_AI_REPLY_MIN_GAP),
+            reactive_reply_enabled=bool(settings.BUBBLLE_AI_REACTIVE_REPLY_ENABLED),
         )
 
         specs = load_all_joinable_bubble_specs(bots_per)
@@ -100,6 +101,8 @@ class Command(BaseCommand):
             self.style.SUCCESS(
                 f"Starting AI bots → {config.base_url} (model={config.openai_model})\n"
                 f"{len(specs)} bubble(s), {bots_per} bot(s) each = {total_bots} connections.\n"
+                f"Scheduled release every {int(config.release_poll_seconds)}s. "
+                f"Reactive OpenAI replies: {'ON' if config.reactive_reply_enabled else 'OFF'}.\n"
                 f"New bubbles picked up every {int(config.poll_seconds)}s. Ctrl+C to stop."
             )
         )

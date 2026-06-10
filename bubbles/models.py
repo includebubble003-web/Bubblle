@@ -59,3 +59,28 @@ class Message(models.Model):
         indexes = [
             models.Index(fields=["bubble", "created_at"]),
         ]
+
+
+class ScheduledMessage(models.Model):
+    """AI/demo lines queued for gradual release — avoids realtime LLM spam."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    bubble = models.ForeignKey(
+        Bubble, on_delete=models.CASCADE, related_name="scheduled_messages"
+    )
+    batch_id = models.UUIDField(db_index=True)
+    anonymous_name = models.CharField(max_length=64)
+    message = models.TextField()
+    release_at = models.DateTimeField(db_index=True)
+    released_at = models.DateTimeField(null=True, blank=True)
+    is_ai_generated = models.BooleanField(default=True)
+    order_in_batch = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["release_at", "order_in_batch"]
+        indexes = [
+            models.Index(fields=["bubble", "released_at", "release_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.anonymous_name}: {self.message[:40]}"
