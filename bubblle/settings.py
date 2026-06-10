@@ -153,9 +153,9 @@ REST_FRAMEWORK = {
 # Bubble defaults (create API — not exposed in UI)
 BUBBLLE_DEFAULT_RADIUS_M = 5_000  # 5 km geofence
 BUBBLLE_DEFAULT_EXPIRES_SECONDS = 23 * 60  # 23 minutes (user-created bubbles)
-# Demo seed + AI agents — long-lived so agents survive restarts (override via .env)
+# Demo seed + AI agent bubbles (override via .env)
 BUBBLLE_DEMO_EXPIRES_SECONDS = int(
-    os.environ.get("BUBBLLE_DEMO_EXPIRES_SECONDS", str(24 * 60 * 60))
+    os.environ.get("BUBBLLE_DEMO_EXPIRES_SECONDS", str(23 * 60))
 )
 
 # Django session cookie (CSRF / admin). Kept separate from anonymous chat identity.
