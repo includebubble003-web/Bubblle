@@ -1,0 +1,135 @@
+.legal-body {
+  min-height: 100%;
+}
+
+.legal-page {
+  max-width: 42rem;
+  margin: 0 auto;
+  min-height: 100%;
+  padding: calc(12px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+}
+
+.legal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 28px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.legal-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-decoration: none;
+}
+
+.legal-back svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.legal-back:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.legal-nav {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 0.9rem;
+}
+
+.legal-nav a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.legal-nav a:hover,
+.legal-nav a[aria-current="page"] {
+  color: var(--accent);
+}
+
+.legal-main {
+  margin-bottom: 32px;
+}
+
+.legal-doc h1 {
+  margin: 0 0 8px;
+  font-size: 1.75rem;
+  line-height: 1.2;
+}
+
+.legal-updated {
+  margin: 0 0 24px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.legal-doc h2 {
+  margin: 28px 0 10px;
+  font-size: 1.15rem;
+  line-height: 1.35;
+}
+
+.legal-doc h3 {
+  margin: 20px 0 8px;
+  font-size: 1rem;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.legal-doc p {
+  margin: 0 0 14px;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.legal-doc ul {
+  margin: 0 0 14px;
+  padding-left: 1.25rem;
+  line-height: 1.6;
+}
+
+.legal-doc li {
+  margin-bottom: 8px;
+}
+
+.legal-doc a {
+  color: var(--accent);
+}
+
+.legal-footer {
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.legal-footer p {
+  margin: 0 0 8px;
+}
+
+.legal-footer-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.legal-footer a {
+  color: var(--muted);
+}
+
+.legal-footer a:hover {
+  color: var(--accent);
+}

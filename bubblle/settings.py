@@ -43,6 +43,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "bubblle.middleware.ApiNoCacheMiddleware",
 ]
 
 ROOT_URLCONF = "bubblle.urls"
@@ -58,6 +59,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "bubblle.context_processors.client_version",
             ],
         },
     },
@@ -110,6 +112,19 @@ BUBBLLE_PUBLIC_BASE_URL = os.environ.get("BUBBLLE_PUBLIC_BASE_URL", "").strip().
 # In DEBUG, serve from app static dirs without running collectstatic; in prod, use STATIC_ROOT (Docker build).
 WHITENOISE_USE_FINDERS = DEBUG
 WHITENOISE_MAX_AGE = 60 * 60 * 24 * 30 if not DEBUG else 0
+
+if not DEBUG:
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+
+# Bumped when client storage schema or critical frontend behavior changes.
+BUBBLLE_CLIENT_VERSION = os.environ.get("BUBBLLE_CLIENT_VERSION", "2")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

@@ -2,6 +2,8 @@
  * Bubblle unified chat shell: sidebar bubbles + room chat + identity.
  */
 import { bootstrapSession, cachedDisplayName, updateDisplayName } from "./session.js";
+import { initClientStorage } from "./client-state.js";
+import { activeUsers, syncOrderedList } from "./bubble-sync.js";
 import {
   acquireLocation,
   formatGeolocationError,
@@ -22,7 +24,9 @@ import {
 
 const $ = (sel) => document.querySelector(sel);
 const SEARCH_RADIUS_M = 5000;
-const NEARBY_POLL_MS = 5000;
+const NEARBY_POLL_MS = 15000;
+const NEARBY_MIN_MOVE_M = 50;
+const API_FETCH = { credentials: "include", cache: "no-store" };
 const WS_RECONNECT_BASE_MS = 3000;
 const WS_RECONNECT_MAX_MS = 20000;
 const MSG_COOLDOWN_MS = 1000;
@@ -40,6 +44,8 @@ let discoveryCenter = null;
 let stopLocation = null;
 let nearbyPollTimer = null;
 let nearbyBubbles = [];
+let homeFeedLoadedOnce = false;
+let nearbyRefreshInFlight = null;
 
 let activeSocket = null;
 let reconnectTimer = null;
@@ -297,10 +303,6 @@ function refreshChatIdentity(oldName, newName) {
   });
 }
 
-function activeUsers(b) {
-  return b.active_users ?? b.online_count ?? 0;
-}
-
 /* --- Location (sidebar pill only — no sticky banner) --- */
 
 function setLocPill(state, title = "") {
@@ -325,7 +327,21 @@ function updateRoomAvatar(title) {
   el.textContent = t ? t.charAt(0).toUpperCase() : "B";
 }
 
+function coordsMovedMeters(a, b) {
+  if (!a || !b) return Infinity;
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 6371000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
 function applyPosition(p, { quiet = false } = {}) {
+  const prev = pos;
   pos = p;
   if (!discoveryCenter) discoveryCenter = { lat: p.lat, lng: p.lng };
   $("#f-lat").value = String(p.lat);
@@ -334,7 +350,11 @@ function applyPosition(p, { quiet = false } = {}) {
   if (!quiet) setBrowseEmpty("");
   hideOnboarding();
   onMapPositionUpdate(p);
-  refreshSidebar();
+
+  const movedEnough = !prev || coordsMovedMeters(prev, p) >= NEARBY_MIN_MOVE_M;
+  if (!quiet || movedEnough) {
+    refreshSidebar({ showLoading: !homeFeedLoadedOnce });
+  }
   startNearbyPolling();
   if (bubbleId) {
     onEnterBubble();
@@ -438,14 +458,37 @@ function sortBubblesByActivity(bubbles) {
   });
 }
 
+function createSidebarItemElement(b) {
+  const wrap = document.createElement("div");
+  wrap.innerHTML = bubbleListItemHtml(b);
+  return wrap.firstElementChild;
+}
+
+function applySidebarItemState(el, b) {
+  const isActive = bubbleId === b.id;
+  el.classList.toggle("is-active", isActive);
+  const titleEl = el.querySelector(".sidebar-bubble-title");
+  if (titleEl) titleEl.textContent = b.title;
+  const countEl = el.querySelector(".sidebar-bubble-count");
+  const count = activeUsers(b);
+  if (countEl) countEl.textContent = String(count);
+  const badge = el.querySelector(".bubble-online-badge");
+  if (badge) badge.title = `${count} active`;
+  const avatar = el.querySelector(".bubble-avatar");
+  if (avatar) avatar.textContent = bubbleInitial(b.title);
+}
+
 function renderBubbleLists() {
   const ul = $("#sidebar-bubbles");
   if (!ul) return;
   if (!nearbyBubbles.length) {
-    ul.innerHTML = "";
+    ul.replaceChildren();
     return;
   }
-  ul.innerHTML = nearbyBubbles.map((b) => bubbleListItemHtml(b)).join("");
+  syncOrderedList(ul, nearbyBubbles, {
+    render: createSidebarItemElement,
+    update: applySidebarItemState,
+  });
   updateBubbleExpiryDisplays();
 }
 
@@ -453,34 +496,53 @@ function getSearchCoords() {
   return discoveryCenter || pos;
 }
 
-async function refreshSidebar() {
+async function refreshSidebar({ showLoading = false } = {}) {
   const center = bubbleId ? pos : getSearchCoords();
   if (!center) return;
-  if (!bubbleId) setHomeFeedLoading(true);
+
+  const shouldShowLoading = showLoading || (!bubbleId && !homeFeedLoadedOnce);
+  if (shouldShowLoading && !bubbleId) setHomeFeedLoading(true);
+
   const params = new URLSearchParams({
     lat: String(center.lat),
     lng: String(center.lng),
     search_radius_m: String(SEARCH_RADIUS_M),
   });
-  try {
-    const res = await fetch(`/api/bubbles/nearby/?${params}`, { credentials: "include" });
-    if (!res.ok) {
-      setBrowseEmpty("Could not load bubbles.");
-      return;
-    }
-    const data = await res.json();
-    nearbyBubbles = sortBubblesByActivity(data.results || []);
-    renderBubbleLists();
-    onMapBubblesUpdated(nearbyBubbles);
-  } catch {
-    onMapBubblesUpdated([]);
+  const fetchKey = params.toString();
+
+  if (nearbyRefreshInFlight?.key === fetchKey) {
+    return nearbyRefreshInFlight.promise;
   }
+
+  const promise = (async () => {
+    try {
+      const res = await fetch(`/api/bubbles/nearby/?${params}`, API_FETCH);
+      if (!res.ok) {
+        if (!homeFeedLoadedOnce) setBrowseEmpty("Could not load bubbles.");
+        return;
+      }
+      const data = await res.json();
+      nearbyBubbles = sortBubblesByActivity(data.results || []);
+      renderBubbleLists();
+      onMapBubblesUpdated(nearbyBubbles);
+      homeFeedLoadedOnce = true;
+    } catch {
+      if (!homeFeedLoadedOnce) onMapBubblesUpdated([]);
+    } finally {
+      if (nearbyRefreshInFlight?.key === fetchKey) nearbyRefreshInFlight = null;
+    }
+  })();
+
+  nearbyRefreshInFlight = { key: fetchKey, promise };
+  return promise;
 }
 
 function startNearbyPolling() {
   stopNearbyPolling();
   nearbyPollTimer = setInterval(() => {
-    if (getSearchCoords() && document.visibilityState !== "hidden") refreshSidebar();
+    if (getSearchCoords() && document.visibilityState !== "hidden") {
+      refreshSidebar({ showLoading: false });
+    }
   }, NEARBY_POLL_MS);
 }
 
@@ -533,9 +595,18 @@ async function saveName() {
 function flushPendingBubbleIntro() {
   if (!bubbleId || !pos || !isWsOpen()) return;
   const key = `bubble-intro-${bubbleId}`;
-  const text = sessionStorage.getItem(key)?.trim();
+  let text = "";
+  try {
+    text = sessionStorage.getItem(key)?.trim() || "";
+  } catch {
+    return;
+  }
   if (!text) return;
-  sessionStorage.removeItem(key);
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
   sendChat(text);
 }
 
@@ -1025,8 +1096,8 @@ async function uploadChatImage(file) {
     if (replySnapshot?.id) fd.append("reply_to", replySnapshot.id);
 
     const res = await fetch(`/api/bubbles/${bubbleId}/messages/image/`, {
+      ...API_FETCH,
       method: "POST",
-      credentials: "include",
       body: fd,
     });
 
@@ -1189,7 +1260,7 @@ function sendChat(text) {
 function loadBubbleMeta() {
   if (!bubbleId || !pos) return;
   const q = new URLSearchParams({ lat: String(pos.lat), lng: String(pos.lng) });
-  fetch(`/api/bubbles/${bubbleId}/?${q}`, { credentials: "include" })
+  fetch(`/api/bubbles/${bubbleId}/?${q}`, API_FETCH)
     .then((res) => (res.ok ? res.json() : null))
     .then((b) => {
       if (!b) {
@@ -1236,7 +1307,7 @@ function loadHistory() {
   const gen = ++historyLoadGeneration;
   const forBubble = bubbleId;
 
-  fetch(`/api/bubbles/${bubbleId}/messages/?limit=80`, { credentials: "include" })
+  fetch(`/api/bubbles/${bubbleId}/messages/?limit=80`, API_FETCH)
     .then((res) => (res.ok ? res.json() : null))
     .then((data) => {
       if (gen !== historyLoadGeneration || forBubble !== bubbleId) return;
@@ -1514,6 +1585,7 @@ async function refreshNearbyBubbles() {
 }
 
 async function main() {
+  initClientStorage();
   setupIdentity();
   setupRoomMenu();
   setupDrawer();
@@ -1531,7 +1603,7 @@ async function main() {
     onPosition: (p) => applyPosition(p, { quiet: true }),
     onDiscoveryCenterChange: (center) => {
       discoveryCenter = center;
-      refreshSidebar();
+      refreshSidebar({ showLoading: false });
     },
     startLocation,
     ensureLocation,
@@ -1561,6 +1633,12 @@ async function main() {
     if (stopLocation) stopLocation();
     teardownChat();
     if (sendCooldownTick) clearInterval(sendCooldownTick);
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && getSearchCoords() && !bubbleId) {
+      refreshSidebar({ showLoading: false });
+    }
   });
 }
 

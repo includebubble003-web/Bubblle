@@ -57,7 +57,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21s7-4.35 7-11a7 7 0 1 0-14 0c0 6.65 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
             </div>
             <p class="onboarding-lead">See and join anonymous conversations happening around you.</p>
-            <p class="onboarding-note">Location is only used to discover nearby bubbles.</p>
+            <p class="onboarding-note">Location is only used to discover nearby bubbles. <a href="/privacy/">Privacy Policy</a></p>
             <button type="button" class="btn-onboarding" id="btn-enable-location">Enable Location</button>
             <p class="onboarding-error" id="onboarding-error" hidden></p>
           </div>
@@ -116,6 +116,12 @@
                 <p class="home-empty-lead">Pan the map or start the first bubble around you.</p>
                 <button type="button" class="home-empty-create" id="home-empty-create">Create bubble</button>
               </div>
+
+              <footer class="home-legal-footer">
+                <a href="/privacy/">Privacy</a>
+                <span aria-hidden="true">·</span>
+                <a href="/terms/">Terms</a>
+              </footer>
             </div>
           </div>
         </div>
@@ -252,6 +258,11 @@
             <span class="room-menu-stat-value" id="room-menu-expiry">—</span>
           </span>
         </li>
+        <li class="room-menu-legal">
+          <a href="/privacy/">Privacy Policy</a>
+          <span aria-hidden="true">·</span>
+          <a href="/terms/">Terms</a>
+        </li>
       </ul>
     </div>
 
@@ -315,6 +326,7 @@
 {% block scripts %}
 <script>
   window.__BUBBLE_ID__ = "{{ bubble_id|default:'' }}";
+  window.__BUBBLLE_CLIENT_VERSION__ = "{{ BUBBLLE_CLIENT_VERSION|default:'2' }}";
 </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="{% static 'js/chat-app.js' %}" type="module"></script>

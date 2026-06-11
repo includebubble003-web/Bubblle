@@ -1,6 +1,10 @@
 /** Browser geolocation — prompt quickly, then refine. */
 
+import { readJsonSessionItem, writeJsonSessionItem } from "./client-state.js";
+
 export const POS_CACHE_KEY = "bbl_last_pos";
+const POS_CACHE_SCHEMA = 2;
+const POS_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
 
 const FAST_OPTS = {
   enableHighAccuracy: false,
@@ -49,23 +53,41 @@ export function formatGeolocationError(err) {
 }
 
 export function readCachedPosition() {
-  try {
-    const raw = sessionStorage.getItem(POS_CACHE_KEY);
-    if (!raw) return null;
-    const p = JSON.parse(raw);
-    if (typeof p?.lat === "number" && typeof p?.lng === "number") return p;
-  } catch {
-    /* ignore */
+  const parsed = readJsonSessionItem(POS_CACHE_KEY);
+  if (!parsed || typeof parsed !== "object") return null;
+
+  const lat = Number(parsed.lat);
+  const lng = Number(parsed.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    try {
+      sessionStorage.removeItem(POS_CACHE_KEY);
+    } catch {
+      /* ignore */
+    }
+    return null;
   }
-  return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+
+  const ts = Number(parsed.ts) || 0;
+  if (ts > 0 && Date.now() - ts > POS_CACHE_MAX_AGE_MS) {
+    try {
+      sessionStorage.removeItem(POS_CACHE_KEY);
+    } catch {
+      /* ignore */
+    }
+    return null;
+  }
+
+  return { lat, lng };
 }
 
 export function cachePosition(p) {
-  try {
-    sessionStorage.setItem(POS_CACHE_KEY, JSON.stringify(p));
-  } catch {
-    /* ignore */
-  }
+  writeJsonSessionItem(POS_CACHE_KEY, {
+    lat: p.lat,
+    lng: p.lng,
+    ts: Date.now(),
+    v: POS_CACHE_SCHEMA,
+  });
 }
 
 function toPoint(pos) {

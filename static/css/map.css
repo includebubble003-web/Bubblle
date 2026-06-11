@@ -245,6 +245,12 @@
   line-height: 1.45;
 }
 
+.onboarding-note a {
+  color: #00c9a7;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .btn-onboarding {
   width: 100%;
   padding: 14px 20px;
@@ -614,6 +620,26 @@
   font-weight: 600;
   font-size: 0.875rem;
   cursor: pointer;
+}
+
+.home-legal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 28px;
+  padding: 16px 0 8px;
+  font-size: 0.78rem;
+  color: #6b7288;
+}
+
+.home-legal-footer a {
+  color: #8b92a8;
+  text-decoration: none;
+}
+
+.home-legal-footer a:hover {
+  color: #00c9a7;
 }
 
 /* FAB */

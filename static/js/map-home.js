@@ -2,6 +2,12 @@
  * Split-screen landing: compact discovery map + scrollable bubble feed.
  */
 import {
+  activeUsers,
+  bubbleFingerprint,
+  markerFingerprint,
+  syncOrderedList,
+} from "./bubble-sync.js";
+import {
   formatGeolocationError,
   geolocationPermissionState,
   requestLocationOnce,
@@ -14,9 +20,11 @@ const markerById = new Map();
 const bubbleById = new Map();
 let hooks = {};
 let feedLoading = false;
+let feedLoadedOnce = false;
 let selectedBubbleId = null;
 let mapMoveTimer = null;
 let suppressMapMoveRefresh = false;
+const markerStateById = new Map();
 
 function $(sel) {
   return document.querySelector(sel);
@@ -35,10 +43,6 @@ function fmtDistance(m) {
   if (!Number.isFinite(n)) return "—";
   if (n < 1000) return `${Math.round(n)} m`;
   return `${(n / 1000).toFixed(1)} km`;
-}
-
-function activeUsers(b) {
-  return b.active_users ?? b.online_count ?? 0;
 }
 
 function bubbleInitial(title) {
@@ -193,17 +197,20 @@ function recenterOnUser() {
 function updateMarkerIcon(b, bubbles) {
   const marker = markerById.get(b.id);
   if (!marker) return;
+  const trending = isTrending(b, bubbles);
+  const selected = selectedBubbleId === b.id;
+  const fp = markerFingerprint(b, { trending, selected });
+  if (markerStateById.get(b.id) === fp) return;
+
   const size = markerSize(activeUsers(b));
   const icon = L.divIcon({
     className: "map-marker-wrap",
-    html: bubbleIconHtml(b, {
-      trending: isTrending(b, bubbles),
-      selected: selectedBubbleId === b.id,
-    }),
+    html: bubbleIconHtml(b, { trending, selected }),
     iconSize: [size, size + 10],
     iconAnchor: [size / 2, size / 2 + 5],
   });
   marker.setIcon(icon);
+  markerStateById.set(b.id, fp);
 }
 
 function syncMapMarkers(bubbles) {
@@ -218,34 +225,46 @@ function syncMapMarkers(bubbles) {
     if (!nextIds.has(id)) {
       markersLayer.removeLayer(marker);
       markerById.delete(id);
+      markerStateById.delete(id);
     }
   }
 
   for (const b of bubbles) {
     const isNew = !markerById.has(b.id);
-    const size = markerSize(activeUsers(b));
-    const icon = L.divIcon({
-      className: "map-marker-wrap",
-      html: bubbleIconHtml(b, {
-        trending: isTrending(b, bubbles),
-        isNew,
-        selected: selectedBubbleId === b.id,
-      }),
-      iconSize: [size, size + 10],
-      iconAnchor: [size / 2, size / 2 + 5],
-    });
+    const trending = isTrending(b, bubbles);
+    const selected = selectedBubbleId === b.id;
+    const fp = markerFingerprint(b, { trending, selected });
     const latlng = [b.latitude, b.longitude];
     let marker = markerById.get(b.id);
+
     if (marker) {
       marker.setLatLng(latlng);
-      marker.setIcon(icon);
+      if (markerStateById.get(b.id) !== fp) {
+        const size = markerSize(activeUsers(b));
+        const icon = L.divIcon({
+          className: "map-marker-wrap",
+          html: bubbleIconHtml(b, { trending, isNew: false, selected }),
+          iconSize: [size, size + 10],
+          iconAnchor: [size / 2, size / 2 + 5],
+        });
+        marker.setIcon(icon);
+        markerStateById.set(b.id, fp);
+      }
     } else {
+      const size = markerSize(activeUsers(b));
+      const icon = L.divIcon({
+        className: "map-marker-wrap",
+        html: bubbleIconHtml(b, { trending, isNew, selected }),
+        iconSize: [size, size + 10],
+        iconAnchor: [size / 2, size / 2 + 5],
+      });
       marker = L.marker(latlng, { icon }).addTo(markersLayer);
       marker.on("click", (e) => {
         L.DomEvent.stopPropagation(e);
         selectBubble(b.id, { scroll: true, pan: true });
       });
       markerById.set(b.id, marker);
+      markerStateById.set(b.id, fp);
     }
   }
 
@@ -332,19 +351,91 @@ function sortByActivity(bubbles) {
   });
 }
 
-function bindFeedCardEvents(root) {
-  root?.querySelectorAll(".bubble-card").forEach((card) => {
-    card.addEventListener("click", (e) => {
-      if (e.target.closest(".bubble-card-join")) return;
+function bindFeedCard(el) {
+  if (!el || el.dataset.bound === "1") return;
+  el.dataset.bound = "1";
+  el.addEventListener("click", (e) => {
+    if (e.target.closest(".bubble-card-join")) return;
+    e.preventDefault();
+    selectBubble(el.dataset.bubbleId, { scroll: false, pan: true });
+  });
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      selectBubble(card.dataset.bubbleId, { scroll: false, pan: true });
-    });
-    card.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        selectBubble(card.dataset.bubbleId, { scroll: false, pan: true });
-      }
-    });
+      selectBubble(el.dataset.bubbleId, { scroll: false, pan: true });
+    }
+  });
+}
+
+function bindFeedCardEvents(root) {
+  root?.querySelectorAll(".bubble-card").forEach((card) => bindFeedCard(card));
+}
+
+function createBubbleCardElement(b, { compact = false } = {}) {
+  const wrap = document.createElement("div");
+  wrap.innerHTML = bubbleCardHtml(b, { compact });
+  const el = wrap.firstElementChild;
+  if (el) bindFeedCard(el);
+  return el;
+}
+
+function applyBubbleCardState(el, b, { compact = false } = {}) {
+  const count = activeUsers(b);
+  const live = count > 0;
+  const trending = isTrending(b, hooks.getNearbyBubbles?.() || []);
+  const selected = selectedBubbleId === b.id;
+
+  el.className = [
+    "bubble-card",
+    compact ? "bubble-card--compact" : "",
+    live ? "bubble-card--live" : "",
+    trending ? "bubble-card--trending" : "",
+    selected ? "bubble-card--selected" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const titleEl = el.querySelector(".bubble-card-title");
+  if (titleEl) titleEl.textContent = b.title || "Bubble";
+
+  const stats = el.querySelectorAll(".bubble-card-stat");
+  if (stats[0]) stats[0].textContent = `${count} active`;
+  if (stats[1]) stats[1].textContent = fmtDistance(b.distance_m);
+  if (stats[2]) stats[2].textContent = fmtLastActivity(b);
+
+  let liveDot = el.querySelector(".bubble-card-live-dot");
+  if (live && !liveDot) {
+    liveDot = document.createElement("span");
+    liveDot.className = "bubble-card-live-dot";
+    liveDot.setAttribute("aria-hidden", "true");
+    el.appendChild(liveDot);
+  } else if (!live && liveDot) {
+    liveDot.remove();
+  }
+
+  let badge = el.querySelector(".bubble-card-badge");
+  if (trending && !badge) {
+    badge = document.createElement("span");
+    badge.className = "bubble-card-badge";
+    badge.textContent = "Hot";
+    el.appendChild(badge);
+  } else if (!trending && badge) {
+    badge.remove();
+  }
+}
+
+function cardFingerprint(b, allBubbles) {
+  const max = Math.max(...allBubbles.map(activeUsers), 0);
+  const trending = activeUsers(b) >= 2 && activeUsers(b) >= max && max >= 2;
+  return `${bubbleFingerprint(b)}|t:${trending ? 1 : 0}`;
+}
+
+function syncFeedSection(container, items, { compact = false, allBubbles = items } = {}) {
+  syncOrderedList(container, items, {
+    fingerprint: (b) => cardFingerprint(b, allBubbles),
+    render: (b) => createBubbleCardElement(b, { compact }),
+    update: (el, b) => applyBubbleCardState(el, b, { compact }),
+    bind: bindFeedCard,
   });
 }
 
@@ -355,8 +446,12 @@ function renderBubbleFeed(bubbles) {
   const trendingEl = $("#feed-trending");
   const emptyEl = $("#home-empty");
   const feedEl = $("#home-feed");
+  const feedScroll = $("#home-feed-scroll");
+
+  const scrollTop = feedScroll?.scrollTop ?? 0;
 
   setFeedLoading(false);
+  feedLoadedOnce = true;
 
   if (!hasPos) {
     $("#feed-trending-section")?.setAttribute("hidden", "hidden");
@@ -376,39 +471,36 @@ function renderBubbleFeed(bubbles) {
     countEl.textContent = nearby.length ? `${nearby.length} in this area` : "";
   }
 
+  const trendingSection = $("#feed-trending-section");
   if (trendingEl) {
-    const section = $("#feed-trending-section");
     if (trending.length) {
-      section?.removeAttribute("hidden");
-      trendingEl.innerHTML = trending.map((b) => bubbleCardHtml(b, { compact: true })).join("");
-      bindFeedCardEvents(trendingEl);
+      trendingSection?.removeAttribute("hidden");
+      syncFeedSection(trendingEl, trending, { compact: true, allBubbles: bubbles });
     } else {
-      section?.setAttribute("hidden", "hidden");
-      trendingEl.innerHTML = "";
+      trendingSection?.setAttribute("hidden", "hidden");
+      trendingEl.replaceChildren();
     }
   }
 
+  const recentSection = $("#feed-recent-section");
   if (recentEl) {
-    const section = $("#feed-recent-section");
     if (recent.length) {
-      section?.removeAttribute("hidden");
-      recentEl.innerHTML = recent.map((b) => bubbleCardHtml(b)).join("");
-      bindFeedCardEvents(recentEl);
+      recentSection?.removeAttribute("hidden");
+      syncFeedSection(recentEl, recent, { allBubbles: bubbles });
     } else {
-      section?.setAttribute("hidden", "hidden");
-      recentEl.innerHTML = "";
+      recentSection?.setAttribute("hidden", "hidden");
+      recentEl.replaceChildren();
     }
   }
 
+  const nearbySection = $("#feed-nearby-section");
   if (nearbyEl) {
-    const section = $("#feed-nearby-section");
     if (nearby.length) {
-      section?.removeAttribute("hidden");
-      nearbyEl.innerHTML = nearby.map((b) => bubbleCardHtml(b)).join("");
-      bindFeedCardEvents(nearbyEl);
+      nearbySection?.removeAttribute("hidden");
+      syncFeedSection(nearbyEl, nearby, { allBubbles: bubbles });
     } else {
-      section?.setAttribute("hidden", "hidden");
-      nearbyEl.innerHTML = "";
+      nearbySection?.setAttribute("hidden", "hidden");
+      nearbyEl.replaceChildren();
     }
   }
 
@@ -424,16 +516,21 @@ function renderBubbleFeed(bubbles) {
 
   const fab = $("#fab-create");
   fab?.classList.toggle("home-fab--highlight", showEmpty && hasPos);
+
+  if (feedScroll && feedScroll.scrollTop !== scrollTop) {
+    feedScroll.scrollTop = scrollTop;
+  }
 }
 
 export function setHomeFeedLoading(loading) {
+  if (loading && feedLoadedOnce) return;
   setFeedLoading(loading);
 }
 
 function setFeedLoading(loading) {
   feedLoading = loading;
   $("#feed-loading")?.toggleAttribute("hidden", !loading);
-  if (loading) {
+  if (loading && !feedLoadedOnce) {
     $("#feed-trending-section")?.setAttribute("hidden", "hidden");
     $("#feed-recent-section")?.setAttribute("hidden", "hidden");
     $("#feed-nearby-section")?.setAttribute("hidden", "hidden");
@@ -464,7 +561,7 @@ function setMapLoading(loading) {
   const el = $("#map-loading");
   if (el) el.hidden = !loading;
   $("#map-screen")?.classList.toggle("home-screen--loading", loading);
-  if (loading && !feedLoading) setFeedLoading(true);
+  if (loading && !feedLoading && !feedLoadedOnce) setFeedLoading(true);
 }
 
 export function showOnboarding(message = "") {
@@ -575,6 +672,7 @@ function setupMapUi() {
       const res = await fetch("/api/bubbles/", {
         method: "POST",
         credentials: "include",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title,
