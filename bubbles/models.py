@@ -75,7 +75,10 @@ class ScheduledMessage(models.Model):
     class Meta:
         ordering = ["release_at", "order_in_batch"]
         indexes = [
-            models.Index(fields=["bubble", "released_at", "release_at"]),
+            models.Index(
+                fields=["bubble", "released_at", "release_at"],
+                name="bubbles_sch_bub_rel_idx",
+            ),
         ]
 
     def __str__(self) -> str:
