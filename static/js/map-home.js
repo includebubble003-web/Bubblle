@@ -8,6 +8,16 @@ import {
   syncOrderedList,
 } from "./bubble-sync.js";
 import {
+  INTEREST_OPTIONS,
+  MAX_INTERESTS,
+  canShowRecommendations,
+  getUserInterests,
+  hasInterestProfile,
+  markInterestsSkipped,
+  rankRecommendedBubbles,
+  saveUserInterests,
+} from "./interests.js";
+import {
   formatGeolocationError,
   geolocationPermissionState,
   requestLocationOnce,
@@ -306,7 +316,7 @@ export function selectBubble(id, { scroll = false, pan = false } = {}) {
   }
 }
 
-function bubbleCardHtml(b, { compact = false } = {}) {
+function bubbleCardHtml(b, { compact = false, recommended = false } = {}) {
   const count = activeUsers(b);
   const live = count > 0;
   const trending = isTrending(b, hooks.getNearbyBubbles?.() || []);
@@ -316,6 +326,7 @@ function bubbleCardHtml(b, { compact = false } = {}) {
     compact ? "bubble-card--compact" : "",
     live ? "bubble-card--live" : "",
     trending ? "bubble-card--trending" : "",
+    recommended ? "bubble-card--recommended" : "",
     selected ? "bubble-card--selected" : "",
   ]
     .filter(Boolean)
@@ -336,7 +347,8 @@ function bubbleCardHtml(b, { compact = false } = {}) {
       </span>
     </span>
     ${live ? '<span class="bubble-card-live-dot" aria-hidden="true"></span>' : ""}
-    ${trending ? '<span class="bubble-card-badge">Hot</span>' : ""}
+    ${recommended ? '<span class="bubble-card-badge bubble-card-badge--for-you">For you</span>' : ""}
+    ${!recommended && trending ? '<span class="bubble-card-badge">Hot</span>' : ""}
     ${joinBtn}
   </article>`;
 }
@@ -373,15 +385,15 @@ function bindFeedCardEvents(root) {
   root?.querySelectorAll(".bubble-card").forEach((card) => bindFeedCard(card));
 }
 
-function createBubbleCardElement(b, { compact = false } = {}) {
+function createBubbleCardElement(b, { compact = false, recommended = false } = {}) {
   const wrap = document.createElement("div");
-  wrap.innerHTML = bubbleCardHtml(b, { compact });
+  wrap.innerHTML = bubbleCardHtml(b, { compact, recommended });
   const el = wrap.firstElementChild;
   if (el) bindFeedCard(el);
   return el;
 }
 
-function applyBubbleCardState(el, b, { compact = false } = {}) {
+function applyBubbleCardState(el, b, { compact = false, recommended = false } = {}) {
   const count = activeUsers(b);
   const live = count > 0;
   const trending = isTrending(b, hooks.getNearbyBubbles?.() || []);
@@ -392,6 +404,7 @@ function applyBubbleCardState(el, b, { compact = false } = {}) {
     compact ? "bubble-card--compact" : "",
     live ? "bubble-card--live" : "",
     trending ? "bubble-card--trending" : "",
+    recommended ? "bubble-card--recommended" : "",
     selected ? "bubble-card--selected" : "",
   ]
     .filter(Boolean)
@@ -415,37 +428,58 @@ function applyBubbleCardState(el, b, { compact = false } = {}) {
     liveDot.remove();
   }
 
-  let badge = el.querySelector(".bubble-card-badge");
-  if (trending && !badge) {
+  let badge = el.querySelector(".bubble-card-badge:not(.bubble-card-badge--for-you)");
+  if (!recommended && trending && !badge) {
     badge = document.createElement("span");
     badge.className = "bubble-card-badge";
     badge.textContent = "Hot";
     el.appendChild(badge);
-  } else if (!trending && badge) {
+  } else if ((!trending || recommended) && badge) {
     badge.remove();
+  }
+
+  let forYou = el.querySelector(".bubble-card-badge--for-you");
+  if (recommended && !forYou) {
+    forYou = document.createElement("span");
+    forYou.className = "bubble-card-badge bubble-card-badge--for-you";
+    forYou.textContent = "For you";
+    el.appendChild(forYou);
+  } else if (!recommended && forYou) {
+    forYou.remove();
   }
 }
 
-function cardFingerprint(b, allBubbles) {
+function cardFingerprint(b, allBubbles, { recommended = false } = {}) {
   const max = Math.max(...allBubbles.map(activeUsers), 0);
   const trending = activeUsers(b) >= 2 && activeUsers(b) >= max && max >= 2;
-  return `${bubbleFingerprint(b)}|t:${trending ? 1 : 0}`;
+  return `${bubbleFingerprint(b)}|t:${trending ? 1 : 0}|r:${recommended ? 1 : 0}`;
 }
 
-function syncFeedSection(container, items, { compact = false, allBubbles = items } = {}) {
+function syncFeedSection(container, items, { compact = false, allBubbles = items, recommended = false } = {}) {
   syncOrderedList(container, items, {
-    fingerprint: (b) => cardFingerprint(b, allBubbles),
-    render: (b) => createBubbleCardElement(b, { compact }),
-    update: (el, b) => applyBubbleCardState(el, b, { compact }),
+    fingerprint: (b) => cardFingerprint(b, allBubbles, { recommended }),
+    render: (b) => createBubbleCardElement(b, { compact, recommended }),
+    update: (el, b) => applyBubbleCardState(el, b, { compact, recommended }),
     bind: bindFeedCard,
   });
 }
 
+function renderFeedSection(sectionId, containerId, items, options = {}) {
+  const section = $(sectionId);
+  const container = $(containerId);
+  if (!container) return;
+
+  if (items.length) {
+    section?.removeAttribute("hidden");
+    syncFeedSection(container, items, options);
+  } else {
+    section?.setAttribute("hidden", "hidden");
+    container.replaceChildren();
+  }
+}
+
 function renderBubbleFeed(bubbles) {
   const hasPos = !!hooks.hasPosition?.();
-  const nearbyEl = $("#feed-nearby");
-  const recentEl = $("#feed-recent");
-  const trendingEl = $("#feed-trending");
   const emptyEl = $("#home-empty");
   const feedEl = $("#home-feed");
   const feedScroll = $("#home-feed-scroll");
@@ -456,55 +490,58 @@ function renderBubbleFeed(bubbles) {
   feedLoadedOnce = true;
 
   if (!hasPos) {
+    $("#feed-recommended-section")?.setAttribute("hidden", "hidden");
+    $("#feed-nearby-section")?.setAttribute("hidden", "hidden");
     $("#feed-trending-section")?.setAttribute("hidden", "hidden");
     $("#feed-recent-section")?.setAttribute("hidden", "hidden");
-    $("#feed-nearby-section")?.setAttribute("hidden", "hidden");
+    $("#feed-discover-section")?.setAttribute("hidden", "hidden");
     emptyEl?.setAttribute("hidden", "hidden");
     return;
   }
 
-  const nearby = sortByDistance(bubbles);
-  const active = sortByActivity(bubbles.filter((b) => activeUsers(b) > 0));
+  const interests = getUserInterests();
+  const recommended = canShowRecommendations()
+    ? rankRecommendedBubbles(bubbles, interests, 8)
+    : [];
+  const nearbyCommunities = sortByDistance(bubbles).slice(0, 8);
   const trending = sortByActivity(bubbles.filter((b) => activeUsers(b) >= 2)).slice(0, 8);
-  const recent = active.filter((b) => !trending.some((t) => t.id === b.id));
+  const trendingIds = new Set(trending.map((b) => b.id));
+  const recent = sortByActivity(
+    bubbles.filter((b) => activeUsers(b) > 0 && !trendingIds.has(b.id)),
+  ).slice(0, 8);
+
+  const featuredIds = new Set([
+    ...recommended.map((b) => b.id),
+    ...nearbyCommunities.map((b) => b.id),
+    ...trending.map((b) => b.id),
+    ...recent.map((b) => b.id),
+  ]);
+  const discover = sortByDistance(bubbles.filter((b) => !featuredIds.has(b.id)));
 
   const countEl = $("#feed-nearby-count");
   if (countEl) {
-    countEl.textContent = nearby.length ? `${nearby.length} in this area` : "";
+    countEl.textContent = nearbyCommunities.length
+      ? `${bubbles.length} in this area`
+      : "";
   }
 
-  const trendingSection = $("#feed-trending-section");
-  if (trendingEl) {
-    if (trending.length) {
-      trendingSection?.removeAttribute("hidden");
-      syncFeedSection(trendingEl, trending, { compact: true, allBubbles: bubbles });
-    } else {
-      trendingSection?.setAttribute("hidden", "hidden");
-      trendingEl.replaceChildren();
-    }
-  }
-
-  const recentSection = $("#feed-recent-section");
-  if (recentEl) {
-    if (recent.length) {
-      recentSection?.removeAttribute("hidden");
-      syncFeedSection(recentEl, recent, { allBubbles: bubbles });
-    } else {
-      recentSection?.setAttribute("hidden", "hidden");
-      recentEl.replaceChildren();
-    }
-  }
-
-  const nearbySection = $("#feed-nearby-section");
-  if (nearbyEl) {
-    if (nearby.length) {
-      nearbySection?.removeAttribute("hidden");
-      syncFeedSection(nearbyEl, nearby, { allBubbles: bubbles });
-    } else {
-      nearbySection?.setAttribute("hidden", "hidden");
-      nearbyEl.replaceChildren();
-    }
-  }
+  renderFeedSection("#feed-recommended-section", "#feed-recommended", recommended, {
+    allBubbles: bubbles,
+    recommended: true,
+  });
+  renderFeedSection("#feed-nearby-section", "#feed-nearby", nearbyCommunities, {
+    allBubbles: bubbles,
+  });
+  renderFeedSection("#feed-trending-section", "#feed-trending", trending, {
+    compact: true,
+    allBubbles: bubbles,
+  });
+  renderFeedSection("#feed-recent-section", "#feed-recent", recent, {
+    allBubbles: bubbles,
+  });
+  renderFeedSection("#feed-discover-section", "#feed-discover", discover, {
+    allBubbles: bubbles,
+  });
 
   if (selectedBubbleId) {
     document.querySelectorAll(".bubble-card").forEach((el) => {
@@ -512,7 +549,7 @@ function renderBubbleFeed(bubbles) {
     });
   }
 
-  const showEmpty = nearby.length === 0;
+  const showEmpty = bubbles.length === 0;
   if (emptyEl) emptyEl.hidden = !showEmpty;
   feedEl?.classList.toggle("home-feed--empty", showEmpty);
 
@@ -533,9 +570,11 @@ function setFeedLoading(loading) {
   feedLoading = loading;
   $("#feed-loading")?.toggleAttribute("hidden", !loading);
   if (loading && !feedLoadedOnce) {
+    $("#feed-recommended-section")?.setAttribute("hidden", "hidden");
+    $("#feed-nearby-section")?.setAttribute("hidden", "hidden");
     $("#feed-trending-section")?.setAttribute("hidden", "hidden");
     $("#feed-recent-section")?.setAttribute("hidden", "hidden");
-    $("#feed-nearby-section")?.setAttribute("hidden", "hidden");
+    $("#feed-discover-section")?.setAttribute("hidden", "hidden");
     $("#home-empty")?.setAttribute("hidden", "hidden");
   }
 }
@@ -836,13 +875,95 @@ function setupMapUi() {
   });
 }
 
+let selectedInterestIds = new Set();
+
+function hideInterestOnboarding() {
+  $("#interest-onboarding")?.setAttribute("hidden", "hidden");
+}
+
+function showInterestOnboarding() {
+  if (hooks.isRoom?.()) return;
+  if (hasInterestProfile()) return;
+  const overlay = $("#interest-onboarding");
+  if (!overlay) return;
+  $("#onboarding")?.setAttribute("hidden", "hidden");
+  selectedInterestIds = new Set(getUserInterests());
+  renderInterestGrid();
+  overlay.removeAttribute("hidden");
+}
+
+function renderInterestGrid() {
+  const grid = $("#interest-grid");
+  const countEl = $("#interest-count");
+  const continueBtn = $("#btn-interests-continue");
+  if (!grid) return;
+
+  grid.replaceChildren(
+    ...INTEREST_OPTIONS.map((option) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "interest-chip";
+      btn.dataset.interestId = option.id;
+      btn.textContent = option.label;
+      btn.setAttribute("aria-pressed", selectedInterestIds.has(option.id) ? "true" : "false");
+      btn.classList.toggle("interest-chip--selected", selectedInterestIds.has(option.id));
+      btn.addEventListener("click", () => toggleInterest(option.id));
+      return btn;
+    })
+  );
+
+  const count = selectedInterestIds.size;
+  if (countEl) countEl.textContent = `${count} / ${MAX_INTERESTS} selected`;
+  if (continueBtn) continueBtn.disabled = count === 0;
+}
+
+function toggleInterest(id) {
+  if (selectedInterestIds.has(id)) {
+    selectedInterestIds.delete(id);
+  } else if (selectedInterestIds.size < MAX_INTERESTS) {
+    selectedInterestIds.add(id);
+  }
+  renderInterestGrid();
+}
+
+function finishInterestOnboarding(saved = false) {
+  hideInterestOnboarding();
+  if (saved) {
+    saveUserInterests([...selectedInterestIds]);
+    const bubbles = hooks.getNearbyBubbles?.() || [];
+    if (bubbles.length) renderBubbleFeed(bubbles);
+  }
+  hooks.onInterestsComplete?.();
+  if (!hooks.hasPosition?.()) tryAutoStart();
+}
+
+function setupInterestOnboarding() {
+  $("#btn-interests-continue")?.addEventListener("click", () => {
+    if (selectedInterestIds.size === 0) return;
+    finishInterestOnboarding(true);
+  });
+
+  $("#btn-interests-skip")?.addEventListener("click", () => {
+    markInterestsSkipped();
+    finishInterestOnboarding(false);
+  });
+}
+
+export function maybeShowInterestOnboarding() {
+  if (hooks.isRoom?.()) return;
+  if (hasInterestProfile()) return;
+  showInterestOnboarding();
+}
+
 export function initMapHome(callbacks) {
   hooks = callbacks;
   setupMapUi();
+  setupInterestOnboarding();
   if (!callbacks.isRoom?.()) {
     ensureMap();
     setMapLoading(!callbacks.hasPosition?.());
-    tryAutoStart();
+    maybeShowInterestOnboarding();
+    if (hasInterestProfile()) tryAutoStart();
   }
 }
 

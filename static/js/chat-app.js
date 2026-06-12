@@ -21,6 +21,7 @@ import {
   setHomeFeedLoading,
   showOnboarding,
 } from "./map-home.js";
+import { hasInterestProfile } from "./interests.js";
 
 const $ = (sel) => document.querySelector(sel);
 const SEARCH_RADIUS_M = 5000;
@@ -271,7 +272,7 @@ function beginLocationWatch() {
   stopLocation = acquireLocation({
     onUpdate: (p, meta) => applyPosition(p, { quiet: meta.source === "refined" }),
     onError: (err) => {
-      if (!bubbleId) showOnboarding(formatGeolocationError(err));
+      if (!bubbleId && hasInterestProfile()) showOnboarding(formatGeolocationError(err));
       setLocPill("error");
     },
   });
@@ -280,7 +281,7 @@ function beginLocationWatch() {
 async function startLocation() {
   if (!isGeolocationContextOk()) {
     setLocPill("error", secureContextHint());
-    if (!bubbleId) showOnboarding(secureContextHint());
+    if (!bubbleId && hasInterestProfile()) showOnboarding(secureContextHint());
     return;
   }
 
@@ -295,7 +296,7 @@ async function startLocation() {
   if (!bubbleId) {
     const perm = await geolocationPermissionState();
     if (perm === "granted") hideOnboarding();
-    else showOnboarding();
+    else if (hasInterestProfile()) showOnboarding();
   }
   beginLocationWatch();
 }
@@ -1521,7 +1522,7 @@ async function main() {
     trackMyName(session.anonymous_name || cachedDisplayName());
     if (myName) syncNameInputs(myName);
   } catch {
-    if (!pos && !bubbleId) showOnboarding("Session error — refresh the page.");
+    if (!pos && !bubbleId && hasInterestProfile()) showOnboarding("Session error — refresh the page.");
   }
 
   window.addEventListener("pagehide", () => {
