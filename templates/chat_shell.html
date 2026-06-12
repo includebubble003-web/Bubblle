@@ -182,7 +182,6 @@
                 <span class="conn-dot" id="conn-dot" data-state="idle"></span>
                 <span class="conn-label" id="conn-label">Connecting</span>
               </span>
-              <span class="room-stat" id="bubble-expiry"></span>
               <span class="room-stat room-stat-accent" id="online-count"></span>
             </div>
           </div>
@@ -190,10 +189,6 @@
       </div>
 
       <div class="topbar-trailing topbar-mobile-only">
-        <span class="expiry-chip" id="bubble-expiry-chip" hidden aria-live="polite">
-          <span class="expiry-chip-icon" aria-hidden="true">⏱</span>
-          <span id="bubble-expiry-chip-text"></span>
-        </span>
         <button type="button" class="btn-icon btn-room-menu" id="btn-room-menu" aria-label="Chat options" aria-haspopup="dialog" aria-controls="room-menu-sheet">
           <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="5" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="19" r="1.5" fill="currentColor"/></svg>
         </button>
@@ -260,10 +255,6 @@
             <span class="room-menu-stat-label">Active</span>
             <span class="room-menu-stat-value" id="room-menu-online">—</span>
           </span>
-          <span class="room-menu-stat">
-            <span class="room-menu-stat-label">Expires</span>
-            <span class="room-menu-stat-value" id="room-menu-expiry">—</span>
-          </span>
         </li>
         <li class="room-menu-legal">
           <a href="/privacy/">Privacy Policy</a>
@@ -285,6 +276,7 @@
               <p class="state-text muted">Loading messages…</p>
             </div>
           </div>
+          <p class="message-retention-note" id="message-retention-note">Messages older than 48 hours are automatically removed.</p>
         </div>
       </div>
     </div>

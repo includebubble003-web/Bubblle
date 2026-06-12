@@ -1,5 +1,3 @@
-from datetime import timedelta
-
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import serializers
@@ -9,7 +7,7 @@ from .services import message_image_url
 
 
 class BubbleCreateSerializer(serializers.ModelSerializer):
-    """Create bubble: title + coordinates only; radius and expiry use server defaults."""
+    """Create bubble: title + coordinates only; radius uses server default."""
 
     class Meta:
         model = Bubble
@@ -26,10 +24,9 @@ class BubbleCreateSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data: dict) -> Bubble:
-        seconds = int(getattr(settings, "BUBBLLE_DEFAULT_EXPIRES_SECONDS", 23 * 60))
         radius = int(getattr(settings, "BUBBLLE_DEFAULT_RADIUS_M", 5000))
         validated_data["radius"] = radius
-        validated_data["expires_at"] = timezone.now() + timedelta(seconds=seconds)
+        validated_data["expires_at"] = None
         validated_data["active"] = True
         return Bubble.objects.create(**validated_data)
 

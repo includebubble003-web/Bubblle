@@ -118,7 +118,6 @@ def broadcast_message(bubble_id: UUID | str, msg: Message) -> None:
 
 def serialize_bubble_summary(bubble: Bubble, viewer_lat: float, viewer_lng: float) -> dict:
     dist = haversine_distance_m(viewer_lat, viewer_lng, bubble.latitude, bubble.longitude)
-    remaining = max(0, int((bubble.expires_at - timezone.now()).total_seconds()))
     users = active_user_count(bubble.id) if bubble.is_joinable() else 0
     return {
         "id": str(bubble.id),
@@ -127,8 +126,6 @@ def serialize_bubble_summary(bubble: Bubble, viewer_lat: float, viewer_lng: floa
         "longitude": bubble.longitude,
         "radius": bubble.radius,
         "distance_m": round(dist, 1),
-        "expires_at": bubble.expires_at.isoformat(),
-        "remaining_seconds": remaining,
         "active": bubble.is_joinable(),
         "active_users": users,
         "online_count": users,  # legacy alias for older clients

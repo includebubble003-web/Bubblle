@@ -9,8 +9,7 @@ export function activeUsers(b) {
 export function bubbleFingerprint(b) {
   const count = activeUsers(b);
   const dist = Number.isFinite(Number(b.distance_m)) ? Math.round(Number(b.distance_m)) : "";
-  const expiry = b.expires_at ?? b.remaining_seconds ?? "";
-  return `${b.id}|${count}|${dist}|${expiry}|${b.title ?? ""}|${b.latitude}|${b.longitude}`;
+  return `${b.id}|${count}|${dist}|${b.title ?? ""}|${b.latitude}|${b.longitude}`;
 }
 
 export function bubblesFingerprint(bubbles) {

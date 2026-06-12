@@ -1,12 +1,11 @@
 import uuid
 
 from django.db import models
-from django.utils import timezone
 
 
 class Bubble(models.Model):
     """
-    A temporary geo-fenced chat room centered at (latitude, longitude).
+    A geo-fenced community centered at (latitude, longitude).
     `radius` is meters — users must be within this distance to join/chat.
     """
 
@@ -16,7 +15,7 @@ class Bubble(models.Model):
     longitude = models.FloatField()
     radius = models.PositiveIntegerField(help_text="Geofence radius in meters.")
     created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField(db_index=True)
+    expires_at = models.DateTimeField(db_index=True, null=True, blank=True)
     active = models.BooleanField(default=True, db_index=True)
 
     class Meta:
@@ -28,11 +27,8 @@ class Bubble(models.Model):
     def __str__(self) -> str:
         return self.title
 
-    def is_expired(self) -> bool:
-        return timezone.now() >= self.expires_at
-
     def is_joinable(self) -> bool:
-        return self.active and not self.is_expired()
+        return self.active
 
 
 class Message(models.Model):
