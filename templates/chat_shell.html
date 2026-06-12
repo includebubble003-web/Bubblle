@@ -89,11 +89,51 @@
         <div class="home-feed-pane" id="home-feed-scroll">
           <div class="home-feed-panel">
             <div class="home-feed-handle" aria-hidden="true"></div>
+
+            <div class="feed-search-sticky" id="feed-search-wrap">
+              <label class="feed-search" for="feed-search">
+                <svg class="feed-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7"/>
+                  <path d="M20 20l-3.5-3.5"/>
+                </svg>
+                <input
+                  type="search"
+                  id="feed-search"
+                  class="feed-search-input"
+                  placeholder="Search communities…"
+                  autocomplete="off"
+                  enterkeyhint="search"
+                  autocapitalize="off"
+                  spellcheck="false"
+                />
+              </label>
+            </div>
+
             <div class="home-feed" id="home-feed">
               <div class="feed-loading" id="feed-loading" hidden>
                 <div class="bubble-card-skeleton"></div>
                 <div class="bubble-card-skeleton"></div>
                 <div class="bubble-card-skeleton"></div>
+              </div>
+
+              <section class="feed-section" id="feed-search-section" hidden>
+                <div class="feed-section-head">
+                  <h2 class="feed-section-title">Search results</h2>
+                  <span class="feed-section-sub" id="feed-search-count"></span>
+                </div>
+                <div class="feed-card-list" id="feed-search-results"></div>
+              </section>
+
+              <div class="feed-search-empty" id="feed-search-empty" hidden>
+                <div class="feed-search-empty-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="M20 20l-3.5-3.5"/>
+                  </svg>
+                </div>
+                <p class="feed-search-empty-title">No communities found</p>
+                <p class="feed-search-empty-lead">Try another keyword or create a new community.</p>
+                <button type="button" class="feed-search-empty-create" id="feed-search-empty-create">Create community</button>
               </div>
 
               <section class="feed-section feed-section--recommended" id="feed-recommended-section" hidden>
