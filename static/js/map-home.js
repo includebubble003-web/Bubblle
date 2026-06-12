@@ -57,8 +57,6 @@ function bubbleInitial(title) {
 function fmtLastActivity(b) {
   const count = activeUsers(b);
   if (count > 0) return "Active now";
-  const sec = b.remaining_seconds ?? 0;
-  if (sec > 0 && sec < 900) return "Started recently";
   return "Quiet";
 }
 

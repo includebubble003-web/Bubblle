@@ -60,8 +60,6 @@ const outboundQueue = [];
 const messageById = new Map();
 let pendingReply = null;
 let lastSentReply = null;
-let expiryTickTimer = null;
-let bubbleExpiresAtMs = null;
 let roomInitializedFor = null;
 let historyLoadGeneration = 0;
 
@@ -164,100 +162,6 @@ function setReplyTarget(m) {
 function clearReply() {
   pendingReply = null;
   $("#reply-compose")?.setAttribute("hidden", "hidden");
-}
-
-function fmtRemaining(sec) {
-  if (sec <= 0) return "Ended";
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
-}
-
-function fmtRemainingCompact(sec) {
-  if (sec <= 0) return "Ended";
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m`;
-  return `${sec}s`;
-}
-
-function remainingSecFromExpiresAt(expiresAt) {
-  if (!expiresAt) return 0;
-  const ms = new Date(expiresAt).getTime();
-  if (Number.isNaN(ms)) return 0;
-  return Math.max(0, Math.floor((ms - Date.now()) / 1000));
-}
-
-function setBubbleExpiryFromMeta(b) {
-  if (!b) return;
-  if (b.expires_at) {
-    bubbleExpiresAtMs = new Date(b.expires_at).getTime();
-    if (Number.isNaN(bubbleExpiresAtMs)) bubbleExpiresAtMs = null;
-  } else if (typeof b.remaining_seconds === "number") {
-    bubbleExpiresAtMs = Date.now() + b.remaining_seconds * 1000;
-  }
-  updateRoomExpiryDisplay();
-}
-
-function updateRoomExpiryDisplay() {
-  const el = $("#bubble-expiry");
-  const chip = $("#bubble-expiry-chip");
-  const chipText = $("#bubble-expiry-chip-text");
-  const menuExpiry = $("#room-menu-expiry");
-  if (!bubbleExpiresAtMs) {
-    if (el) el.textContent = "";
-    if (chip) chip.hidden = true;
-    if (menuExpiry) menuExpiry.textContent = "—";
-    return;
-  }
-  const sec = Math.max(0, Math.floor((bubbleExpiresAtMs - Date.now()) / 1000));
-  const compact = fmtRemainingCompact(sec);
-  const full = fmtRemaining(sec);
-  if (el) el.textContent = full;
-  if (chip && chipText) {
-    chipText.textContent = compact;
-    chip.hidden = false;
-    chip.title = `Expires in ${full}`;
-  }
-  if (menuExpiry) menuExpiry.textContent = compact;
-  if (sec <= 0 && bubbleActive) {
-    bubbleActive = false;
-    allowReconnect = false;
-    setStatus("This bubble has ended.", true);
-    setConnDot("error");
-    if (activeSocket) detachSocket(activeSocket);
-    activeSocket = null;
-  }
-}
-
-function updateBubbleExpiryDisplays() {
-  document.querySelectorAll("#sidebar-bubbles .sidebar-bubble, #home-bubbles .sidebar-bubble").forEach((li) => {
-    const id = li.dataset.bubbleId;
-    const b = nearbyBubbles.find((x) => x.id === id);
-    const span = li.querySelector(".sidebar-bubble-expiry");
-    if (!b || !span) return;
-    const sec = b.expires_at ? remainingSecFromExpiresAt(b.expires_at) : (b.remaining_seconds ?? 0);
-    span.textContent = fmtRemaining(sec);
-  });
-}
-
-function tickExpiryUi() {
-  updateRoomExpiryDisplay();
-  updateBubbleExpiryDisplays();
-}
-
-function startExpiryTicker() {
-  if (expiryTickTimer) return;
-  expiryTickTimer = setInterval(tickExpiryUi, 1000);
-}
-
-function stopExpiryTicker() {
-  if (expiryTickTimer) {
-    clearInterval(expiryTickTimer);
-    expiryTickTimer = null;
-  }
 }
 
 function isMyMessage(anonymousName) {
@@ -431,16 +335,12 @@ function bubbleInitial(title) {
 
 function bubbleListItemHtml(b) {
   const isActive = bubbleId === b.id;
-  const sec = b.expires_at ? remainingSecFromExpiresAt(b.expires_at) : (b.remaining_seconds ?? 0);
   const count = activeUsers(b);
   return `<li class="sidebar-bubble${isActive ? " is-active" : ""}" data-bubble-id="${escapeHtml(b.id)}">
     <a href="/bubble/${b.id}/" class="sidebar-bubble-link">
       <span class="bubble-avatar" aria-hidden="true">${escapeHtml(bubbleInitial(b.title))}</span>
       <span class="bubble-link-body">
         <span class="sidebar-bubble-title">${escapeHtml(b.title)}</span>
-        <span class="sidebar-bubble-meta">
-          <span class="sidebar-bubble-expiry">${fmtRemaining(sec)}</span>
-        </span>
       </span>
       <span class="bubble-online-badge" title="${count} active">
         <span class="bubble-online-dot" aria-hidden="true"></span>
@@ -489,7 +389,6 @@ function renderBubbleLists() {
     render: createSidebarItemElement,
     update: applySidebarItemState,
   });
-  updateBubbleExpiryDisplays();
 }
 
 function getSearchCoords() {
@@ -876,7 +775,7 @@ function isPermanentWsClose(code) {
 function permanentCloseMessage(code) {
   if (code === 4401) return "Session missing — refresh.";
   if (code === 4403) return "Outside bubble radius.";
-  if (code === 4404) return "Bubble ended.";
+  if (code === 4404) return "Community unavailable.";
   return "Cannot join.";
 }
 
@@ -997,7 +896,7 @@ function connectWs() {
         bubbleActive = false;
         allowReconnect = false;
         detachSocket(socket);
-        setStatus("Bubble ended.", true);
+        setStatus("Bubble unavailable.", true);
         setConnDot("error");
       }
     }
@@ -1053,7 +952,7 @@ async function compressImageFile(file) {
 async function uploadChatImage(file) {
   if (!bubbleId) return;
   if (!bubbleActive) {
-    setComposerHint("This bubble has ended.", { kind: "cooldown" });
+    setComposerHint("This community is unavailable.", { kind: "cooldown" });
     return;
   }
   if (!pos) {
@@ -1139,7 +1038,7 @@ async function uploadChatImage(file) {
 function openMediaPicker(inputEl) {
   if (!bubbleId) return;
   if (!bubbleActive) {
-    setComposerHint("This bubble has ended.", { kind: "cooldown" });
+    setComposerHint("This community is unavailable.", { kind: "cooldown" });
     return;
   }
   if (!pos) {
@@ -1272,13 +1171,12 @@ function loadBubbleMeta() {
       $("#bubble-title").textContent = b.title;
       setRoomMenuTitle(b.title);
       updateRoomAvatar(b.title);
-      setBubbleExpiryFromMeta(b);
       const n = b.active_users ?? b.online_count;
       if (typeof n === "number") setOnlineCount(n);
       if (!b.active) {
         bubbleActive = false;
         allowReconnect = false;
-        setStatus("This bubble has ended.", true);
+        setStatus("This community is unavailable.", true);
         setConnDot("error");
       } else if (b.distance_m != null && b.distance_m > b.radius) {
         stopReconnecting("Move closer to join this bubble.");
@@ -1481,7 +1379,7 @@ function setupMessageReplies() {
   const pickMessage = (row) => {
     if (!row?.dataset.messageId) return;
     if (!bubbleActive) {
-      setComposerHint("This bubble has ended.", { kind: "muted" });
+      setComposerHint("This community is unavailable.", { kind: "muted" });
       return;
     }
     const m = messageFromRow(row);
@@ -1616,7 +1514,6 @@ async function main() {
     showWelcome();
   }
 
-  startExpiryTicker();
   startLocation();
 
   try {
@@ -1629,7 +1526,6 @@ async function main() {
 
   window.addEventListener("pagehide", () => {
     stopNearbyPolling();
-    stopExpiryTicker();
     if (stopLocation) stopLocation();
     teardownChat();
     if (sendCooldownTick) clearInterval(sendCooldownTick);

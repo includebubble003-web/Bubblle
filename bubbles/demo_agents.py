@@ -94,16 +94,13 @@ DemoBubbleSpec = BubbleAgentSpec
 def load_all_joinable_bubble_specs(
     bots_per_bubble: int | None = None,
 ) -> list[BubbleAgentSpec]:
-    """Every active, non-expired bubble — one AI persona each by default."""
-    from django.utils import timezone
-
+    """Every active bubble — one AI persona each by default."""
     from bubbles.models import Bubble
 
     if bots_per_bubble is None:
         bots_per_bubble = int(getattr(django_settings, "BUBBLLE_AI_BOTS_PER_BUBBLE", 1))
 
-    now = timezone.now()
-    bubbles = Bubble.objects.filter(active=True, expires_at__gt=now).order_by("-created_at")
+    bubbles = Bubble.objects.filter(active=True).order_by("-created_at")
     specs: list[BubbleAgentSpec] = []
     for b in bubbles:
         bid = str(b.id)

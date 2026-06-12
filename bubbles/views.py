@@ -21,7 +21,6 @@ from .serializers import (
     MessageImageUploadSerializer,
     MessageOutSerializer,
 )
-from .membership import membership_clear
 from .image_utils import chat_image_upload_path, optimize_chat_image
 from .similarity import is_similar_enough, similar_bubble_score
 from .services import (
@@ -70,7 +69,6 @@ def bubble_create(request):
             "latitude": bubble.latitude,
             "longitude": bubble.longitude,
             "radius": bubble.radius,
-            "expires_at": bubble.expires_at.isoformat(),
             "active": bubble.active,
         },
         status=status.HTTP_201_CREATED,
@@ -94,14 +92,12 @@ def bubbles_nearby(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    now = timezone.now()
-    qs = Bubble.objects.filter(active=True, expires_at__gt=now).only(
+    qs = Bubble.objects.filter(active=True).only(
         "id",
         "title",
         "latitude",
         "longitude",
         "radius",
-        "expires_at",
         "active",
         "created_at",
     )
@@ -136,14 +132,12 @@ def bubbles_similar(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    now = timezone.now()
-    qs = Bubble.objects.filter(active=True, expires_at__gt=now).only(
+    qs = Bubble.objects.filter(active=True).only(
         "id",
         "title",
         "latitude",
         "longitude",
         "radius",
-        "expires_at",
         "active",
         "created_at",
     )
@@ -179,11 +173,6 @@ def bubble_detail(request, bubble_id: UUID):
     except Bubble.DoesNotExist:
         return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-    if bubble.is_expired() and bubble.active:
-        bubble.active = False
-        bubble.save(update_fields=["active"])
-        membership_clear(bubble.id)
-
     lat_q = request.GET.get("lat")
     lng_q = request.GET.get("lng")
     if lat_q is not None and lng_q is not None:
@@ -201,8 +190,6 @@ def bubble_detail(request, bubble_id: UUID):
             "latitude": bubble.latitude,
             "longitude": bubble.longitude,
             "radius": bubble.radius,
-            "expires_at": bubble.expires_at.isoformat(),
-            "remaining_seconds": max(0, int((bubble.expires_at - timezone.now()).total_seconds())),
             "active": bubble.is_joinable(),
             "active_users": users,
             "online_count": users,

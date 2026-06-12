@@ -51,7 +51,6 @@ class Command(BaseCommand):
             action="store_true",
             help="Skip seeding Redis active user count.",
         )
-        parser.add_argument("--expires-hours", type=float, default=None)
         parser.add_argument(
             "--initial-messages",
             type=int,
@@ -96,13 +95,6 @@ class Command(BaseCommand):
             return
 
         radius = int(getattr(settings, "BUBBLLE_DEFAULT_RADIUS_M", 5000))
-        if options["expires_hours"] is not None:
-            expires_seconds = int(options["expires_hours"] * 3600)
-        else:
-            expires_seconds = int(
-                getattr(settings, "BUBBLLE_DEMO_EXPIRES_SECONDS", 23 * 60)
-            )
-        expires_at = timezone.now() + timedelta(seconds=expires_seconds)
 
         created_bubbles = []
         total_initial = 0
@@ -118,7 +110,7 @@ class Command(BaseCommand):
                 latitude=lat + dlat,
                 longitude=lng + dlng,
                 radius=radius,
-                expires_at=expires_at,
+                expires_at=None,
                 active=True,
             )
             users = USER_POOLS[i]

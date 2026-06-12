@@ -69,7 +69,7 @@ class BubbleConsumer(AsyncJsonWebsocketConsumer):
         bubble = await self._get_bubble(self.bubble_id)
         if not bubble or not bubble.is_joinable():
             logger.warning(
-                "WS rejected: bubble %s missing or not joinable (expired?)",
+                "WS rejected: bubble %s missing or not joinable",
                 self.bubble_id,
             )
             await self.close(code=4404)
@@ -236,16 +236,9 @@ class BubbleConsumer(AsyncJsonWebsocketConsumer):
     @database_sync_to_async
     def _get_bubble(self, bubble_id: uuid.UUID) -> Bubble | None:
         try:
-            b = Bubble.objects.get(id=bubble_id)
+            return Bubble.objects.get(id=bubble_id)
         except Bubble.DoesNotExist:
             return None
-        if b.is_expired() and b.active:
-            from .membership import membership_clear
-
-            b.active = False
-            b.save(update_fields=["active"])
-            membership_clear(bubble_id)
-        return b
 
     @database_sync_to_async
     def _within_bubble(self, lat: float, lng: float) -> bool:
