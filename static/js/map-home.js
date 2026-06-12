@@ -25,6 +25,10 @@ let selectedBubbleId = null;
 let mapMoveTimer = null;
 let suppressMapMoveRefresh = false;
 const markerStateById = new Map();
+let similarSearchTimer = null;
+let similarFetchAbort = null;
+const SIMILAR_SEARCH_MS = 320;
+const SIMILAR_SEARCH_RADIUS_M = 5000;
 
 function $(sel) {
   return document.querySelector(sel);
@@ -607,10 +611,133 @@ function closeAllSheets() {
   $("#create-sheet")?.setAttribute("hidden", "hidden");
   $("#sheet-backdrop")?.setAttribute("hidden", "hidden");
   document.body.classList.remove("sheet-open");
+  clearSimilarResults();
+}
+
+function clearSimilarResults() {
+  if (similarSearchTimer) {
+    clearTimeout(similarSearchTimer);
+    similarSearchTimer = null;
+  }
+  if (similarFetchAbort) {
+    similarFetchAbort.abort();
+    similarFetchAbort = null;
+  }
+  const section = $("#create-similar-section");
+  const list = $("#create-similar-list");
+  section?.setAttribute("hidden", "hidden");
+  if (list) list.replaceChildren();
+  updateCreateSubmitLabel(false);
+}
+
+function updateCreateSubmitLabel(hasSimilar) {
+  const btn = $("#create-bubble-submit");
+  if (!btn) return;
+  if (hasSimilar) {
+    btn.textContent = "Create new bubble anyway";
+    btn.classList.add("btn-sheet-primary--secondary-label");
+  } else {
+    btn.textContent = "Create & join";
+    btn.classList.remove("btn-sheet-primary--secondary-label");
+  }
+}
+
+function renderSimilarResults(bubbles) {
+  const section = $("#create-similar-section");
+  const list = $("#create-similar-list");
+  if (!section || !list) return;
+
+  if (!bubbles.length) {
+    section.setAttribute("hidden", "hidden");
+    list.replaceChildren();
+    updateCreateSubmitLabel(false);
+    return;
+  }
+
+  section.removeAttribute("hidden");
+  list.replaceChildren(
+    ...bubbles.map((b) => {
+      const li = document.createElement("li");
+      li.className = "create-similar-item";
+      const count = activeUsers(b);
+      li.innerHTML = `<span class="create-similar-item-body">
+        <span class="create-similar-item-title">${escapeHtml(b.title || "Bubble")}</span>
+        <span class="create-similar-item-meta">${count} active nearby</span>
+      </span>
+      <a href="${bubbleHref(b.id)}" class="create-similar-join">Join</a>`;
+      return li;
+    })
+  );
+  updateCreateSubmitLabel(true);
+}
+
+function scheduleSimilarSearch(query) {
+  if (similarSearchTimer) clearTimeout(similarSearchTimer);
+  const trimmed = query.trim();
+
+  if (trimmed.length < 2) {
+    clearSimilarResults();
+    return;
+  }
+
+  similarSearchTimer = setTimeout(() => {
+    similarSearchTimer = null;
+    searchSimilarBubbles(trimmed);
+  }, SIMILAR_SEARCH_MS);
+}
+
+async function searchSimilarBubbles(query) {
+  const pos = hooks.getPosition?.();
+  if (!pos) {
+    clearSimilarResults();
+    return;
+  }
+
+  if (similarFetchAbort) similarFetchAbort.abort();
+  similarFetchAbort = new AbortController();
+
+  const section = $("#create-similar-section");
+  const list = $("#create-similar-list");
+  section?.removeAttribute("hidden");
+  if (list) {
+    list.replaceChildren();
+    const loading = document.createElement("p");
+    loading.className = "create-similar-loading";
+    loading.textContent = "Searching similar communities…";
+    list.appendChild(loading);
+  }
+
+  const params = new URLSearchParams({
+    q: query,
+    lat: String(pos.lat),
+    lng: String(pos.lng),
+    search_radius_m: String(SIMILAR_SEARCH_RADIUS_M),
+  });
+
+  try {
+    const res = await fetch(`/api/bubbles/similar/?${params}`, {
+      credentials: "include",
+      cache: "no-store",
+      signal: similarFetchAbort.signal,
+    });
+    if (!res.ok) {
+      renderSimilarResults([]);
+      return;
+    }
+    const data = await res.json();
+    renderSimilarResults(data.results || []);
+  } catch (err) {
+    if (err?.name === "AbortError") return;
+    renderSimilarResults([]);
+  } finally {
+    if (similarFetchAbort?.signal.aborted) return;
+    similarFetchAbort = null;
+  }
 }
 
 function openCreateSheet() {
   const input = $("#create-bubble-title");
+  clearSimilarResults();
   if (input) {
     input.value = "";
     const desc = $("#create-bubble-desc");
@@ -655,6 +782,10 @@ function setupMapUi() {
 
   $("#home-empty-create")?.addEventListener("click", () => {
     $("#fab-create")?.click();
+  });
+
+  $("#create-bubble-title")?.addEventListener("input", (e) => {
+    scheduleSimilarSearch(e.target.value || "");
   });
 
   $("#create-bubble-form")?.addEventListener("submit", async (e) => {

@@ -146,7 +146,14 @@
         </button>
       </div>
       <form id="create-bubble-form" class="create-sheet-form">
-        <input id="create-bubble-title" name="title" maxlength="120" required placeholder="Bubble name…" autocomplete="off" />
+        <input id="create-bubble-title" name="title" maxlength="120" required placeholder="Bubble name…" autocomplete="off" aria-describedby="create-similar-section" />
+        <div id="create-similar-section" class="create-similar-section" hidden>
+          <div class="create-similar-head">
+            <h3 class="create-similar-title">Similar communities</h3>
+            <p class="create-similar-sub">Join an active bubble instead of starting a duplicate</p>
+          </div>
+          <ul id="create-similar-list" class="create-similar-list" aria-live="polite"></ul>
+        </div>
         <textarea id="create-bubble-desc" name="description" maxlength="200" rows="2" placeholder="Optional description (sent as your first message)…"></textarea>
         <p class="create-sheet-hint">Your bubble appears for anyone within 5 km.</p>
         <p class="sheet-error" id="create-sheet-error" hidden></p>
