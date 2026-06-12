@@ -478,27 +478,41 @@ function renderFeedSection(sectionId, containerId, items, options = {}) {
   }
 }
 
-function renderBubbleFeed(bubbles) {
-  const hasPos = !!hooks.hasPosition?.();
-  const emptyEl = $("#home-empty");
-  const feedEl = $("#home-feed");
-  const feedScroll = $("#home-feed-scroll");
+let feedSearchQuery = "";
 
-  const scrollTop = feedScroll?.scrollTop ?? 0;
+function normalizeSearchText(text) {
+  return String(text || "")
+    .toLowerCase()
+    .trim();
+}
 
-  setFeedLoading(false);
-  feedLoadedOnce = true;
+function bubbleMatchesSearch(bubble, query) {
+  const q = normalizeSearchText(query);
+  if (!q) return true;
+  const haystack = normalizeSearchText(bubble.title);
+  return haystack.includes(q);
+}
 
-  if (!hasPos) {
-    $("#feed-recommended-section")?.setAttribute("hidden", "hidden");
-    $("#feed-nearby-section")?.setAttribute("hidden", "hidden");
-    $("#feed-trending-section")?.setAttribute("hidden", "hidden");
-    $("#feed-recent-section")?.setAttribute("hidden", "hidden");
-    $("#feed-discover-section")?.setAttribute("hidden", "hidden");
-    emptyEl?.setAttribute("hidden", "hidden");
-    return;
-  }
+function filterBubblesBySearch(bubbles, query) {
+  const q = query.trim();
+  if (!q) return bubbles;
+  return bubbles.filter((b) => bubbleMatchesSearch(b, q));
+}
 
+function hideStandardFeedSections() {
+  $("#feed-recommended-section")?.setAttribute("hidden", "hidden");
+  $("#feed-nearby-section")?.setAttribute("hidden", "hidden");
+  $("#feed-trending-section")?.setAttribute("hidden", "hidden");
+  $("#feed-recent-section")?.setAttribute("hidden", "hidden");
+  $("#feed-discover-section")?.setAttribute("hidden", "hidden");
+  $("#feed-recommended")?.replaceChildren();
+  $("#feed-nearby")?.replaceChildren();
+  $("#feed-trending")?.replaceChildren();
+  $("#feed-recent")?.replaceChildren();
+  $("#feed-discover")?.replaceChildren();
+}
+
+function renderStandardFeedSections(bubbles) {
   const interests = getUserInterests();
   const recommended = canShowRecommendations()
     ? rankRecommendedBubbles(bubbles, interests, 8)
@@ -542,19 +556,78 @@ function renderBubbleFeed(bubbles) {
   renderFeedSection("#feed-discover-section", "#feed-discover", discover, {
     allBubbles: bubbles,
   });
+}
+
+function renderSearchFeed(bubbles, query) {
+  const searchSection = $("#feed-search-section");
+  const searchResults = $("#feed-search-results");
+  const searchEmpty = $("#feed-search-empty");
+  const searchCount = $("#feed-search-count");
+  const results = sortByDistance(filterBubblesBySearch(bubbles, query));
+
+  hideStandardFeedSections();
+  $("#home-empty")?.setAttribute("hidden", "hidden");
+  $("#home-feed")?.classList.remove("home-feed--empty");
+
+  if (!results.length) {
+    searchSection?.setAttribute("hidden", "hidden");
+    searchResults?.replaceChildren();
+    searchEmpty?.removeAttribute("hidden");
+    if (searchCount) searchCount.textContent = "";
+    return;
+  }
+
+  searchEmpty?.setAttribute("hidden", "hidden");
+  searchSection?.removeAttribute("hidden");
+  if (searchCount) {
+    searchCount.textContent = `${results.length} match${results.length === 1 ? "" : "es"}`;
+  }
+  syncFeedSection(searchResults, results, { allBubbles: bubbles });
+}
+
+function renderBubbleFeed(bubbles) {
+  const hasPos = !!hooks.hasPosition?.();
+  const emptyEl = $("#home-empty");
+  const feedEl = $("#home-feed");
+  const feedScroll = $("#home-feed-scroll");
+  const query = feedSearchQuery.trim();
+  const isSearching = query.length > 0;
+
+  const scrollTop = feedScroll?.scrollTop ?? 0;
+
+  setFeedLoading(false);
+  feedLoadedOnce = true;
+
+  if (!hasPos) {
+    hideStandardFeedSections();
+    $("#feed-search-section")?.setAttribute("hidden", "hidden");
+    $("#feed-search-results")?.replaceChildren();
+    $("#feed-search-empty")?.setAttribute("hidden", "hidden");
+    emptyEl?.setAttribute("hidden", "hidden");
+    return;
+  }
+
+  if (isSearching) {
+    renderSearchFeed(bubbles, query);
+  } else {
+    $("#feed-search-section")?.setAttribute("hidden", "hidden");
+    $("#feed-search-results")?.replaceChildren();
+    $("#feed-search-empty")?.setAttribute("hidden", "hidden");
+    renderStandardFeedSections(bubbles);
+
+    const showEmpty = bubbles.length === 0;
+    if (emptyEl) emptyEl.hidden = !showEmpty;
+    feedEl?.classList.toggle("home-feed--empty", showEmpty);
+
+    const fab = $("#fab-create");
+    fab?.classList.toggle("home-fab--highlight", showEmpty && hasPos);
+  }
 
   if (selectedBubbleId) {
     document.querySelectorAll(".bubble-card").forEach((el) => {
       el.classList.toggle("bubble-card--selected", el.dataset.bubbleId === selectedBubbleId);
     });
   }
-
-  const showEmpty = bubbles.length === 0;
-  if (emptyEl) emptyEl.hidden = !showEmpty;
-  feedEl?.classList.toggle("home-feed--empty", showEmpty);
-
-  const fab = $("#fab-create");
-  fab?.classList.toggle("home-fab--highlight", showEmpty && hasPos);
 
   if (feedScroll && feedScroll.scrollTop !== scrollTop) {
     feedScroll.scrollTop = scrollTop;
@@ -575,6 +648,8 @@ function setFeedLoading(loading) {
     $("#feed-trending-section")?.setAttribute("hidden", "hidden");
     $("#feed-recent-section")?.setAttribute("hidden", "hidden");
     $("#feed-discover-section")?.setAttribute("hidden", "hidden");
+    $("#feed-search-section")?.setAttribute("hidden", "hidden");
+    $("#feed-search-empty")?.setAttribute("hidden", "hidden");
     $("#home-empty")?.setAttribute("hidden", "hidden");
   }
 }
@@ -818,6 +893,16 @@ function setupMapUi() {
   });
 
   $("#home-empty-create")?.addEventListener("click", () => {
+    $("#fab-create")?.click();
+  });
+
+  $("#feed-search")?.addEventListener("input", (e) => {
+    feedSearchQuery = e.target.value || "";
+    const bubbles = hooks.getNearbyBubbles?.() || [];
+    renderBubbleFeed(bubbles);
+  });
+
+  $("#feed-search-empty-create")?.addEventListener("click", () => {
     $("#fab-create")?.click();
   });
 
