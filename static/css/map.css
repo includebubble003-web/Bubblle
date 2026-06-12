@@ -251,6 +251,101 @@
   text-underline-offset: 2px;
 }
 
+.onboarding-note a:hover {
+  color: #00e5c3;
+}
+
+/* Interest selection (first visit) */
+.interest-onboarding {
+  z-index: 45;
+}
+
+.interest-card {
+  text-align: left;
+}
+
+.interest-title {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #f0f2f7;
+  text-align: center;
+}
+
+.interest-sub {
+  margin: 0 0 18px;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: #8b92a8;
+  text-align: center;
+}
+
+.interest-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+.interest-chip {
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e8eaef;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.interest-chip:hover {
+  border-color: rgba(0, 201, 167, 0.35);
+  background: rgba(0, 201, 167, 0.08);
+}
+
+.interest-chip--selected {
+  border-color: rgba(0, 201, 167, 0.55);
+  background: rgba(0, 201, 167, 0.16);
+  color: #d9fff9;
+}
+
+.interest-count {
+  margin: 0 0 14px;
+  font-size: 0.75rem;
+  color: #8b92a8;
+  text-align: center;
+}
+
+.interest-card .btn-onboarding {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.interest-card .btn-onboarding:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-interests-skip {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  border: none;
+  background: transparent;
+  color: #8b92a8;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.btn-interests-skip:hover {
+  color: #e8eaef;
+}
+
 .btn-onboarding {
   width: 100%;
   padding: 14px 20px;
@@ -364,6 +459,28 @@
   font-size: 0.75rem;
   color: #8b92a8;
   white-space: nowrap;
+}
+
+.feed-section--recommended .feed-section-title {
+  color: #d9fff9;
+}
+
+.feed-section--recommended {
+  padding: 12px;
+  margin-bottom: 4px;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 201, 167, 0.18);
+  background: rgba(0, 201, 167, 0.05);
+}
+
+.bubble-card--recommended {
+  border-color: rgba(0, 201, 167, 0.22);
+}
+
+.bubble-card-badge--for-you {
+  background: rgba(0, 201, 167, 0.14);
+  border-color: rgba(0, 201, 167, 0.35);
+  color: #9ef5e3;
 }
 
 .feed-trending-row {

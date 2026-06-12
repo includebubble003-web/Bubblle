@@ -51,6 +51,17 @@
       </header>
 
       <div class="home-split" id="home-split">
+        <div id="interest-onboarding" class="onboarding onboarding--overlay interest-onboarding" hidden role="dialog" aria-labelledby="interest-title">
+          <div class="onboarding-card interest-card">
+            <h2 class="interest-title" id="interest-title">What are you interested in?</h2>
+            <p class="interest-sub">Pick up to 5 topics — we'll recommend communities nearby</p>
+            <div class="interest-grid" id="interest-grid" role="group" aria-label="Interests"></div>
+            <p class="interest-count" id="interest-count" aria-live="polite">0 / 5 selected</p>
+            <button type="button" class="btn-onboarding" id="btn-interests-continue" disabled>Continue</button>
+            <button type="button" class="btn-interests-skip" id="btn-interests-skip">Skip for now</button>
+          </div>
+        </div>
+
         <div id="onboarding" class="onboarding onboarding--overlay" hidden>
           <div class="onboarding-card">
             <div class="onboarding-icon" aria-hidden="true">
@@ -85,9 +96,25 @@
                 <div class="bubble-card-skeleton"></div>
               </div>
 
+              <section class="feed-section feed-section--recommended" id="feed-recommended-section" hidden>
+                <div class="feed-section-head">
+                  <h2 class="feed-section-title">Recommended For You</h2>
+                  <span class="feed-section-sub">Interest match · distance · activity</span>
+                </div>
+                <div class="feed-card-list" id="feed-recommended"></div>
+              </section>
+
+              <section class="feed-section" id="feed-nearby-section" hidden>
+                <div class="feed-section-head">
+                  <h2 class="feed-section-title">Nearby Communities</h2>
+                  <span class="feed-section-sub" id="feed-nearby-count"></span>
+                </div>
+                <div class="feed-card-list" id="feed-nearby"></div>
+              </section>
+
               <section class="feed-section" id="feed-trending-section" hidden>
                 <div class="feed-section-head">
-                  <h2 class="feed-section-title">Trending</h2>
+                  <h2 class="feed-section-title">Trending Nearby</h2>
                   <span class="feed-section-sub">People chatting now</span>
                 </div>
                 <div class="feed-trending-row" id="feed-trending"></div>
@@ -95,17 +122,17 @@
 
               <section class="feed-section" id="feed-recent-section" hidden>
                 <div class="feed-section-head">
-                  <h2 class="feed-section-title">Recently active</h2>
+                  <h2 class="feed-section-title">Recently Active</h2>
                 </div>
                 <div class="feed-card-list" id="feed-recent"></div>
               </section>
 
-              <section class="feed-section" id="feed-nearby-section">
+              <section class="feed-section" id="feed-discover-section" hidden>
                 <div class="feed-section-head">
-                  <h2 class="feed-section-title">Nearby bubbles</h2>
-                  <span class="feed-section-sub" id="feed-nearby-count"></span>
+                  <h2 class="feed-section-title">Discover More</h2>
+                  <span class="feed-section-sub">More communities around you</span>
                 </div>
-                <div class="feed-card-list" id="feed-nearby"></div>
+                <div class="feed-card-list" id="feed-discover"></div>
               </section>
 
               <div class="home-empty" id="home-empty" hidden>
