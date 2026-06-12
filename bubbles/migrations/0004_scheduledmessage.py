@@ -44,12 +44,22 @@ class Migration(migrations.Migration):
             ],
             options={
                 "ordering": ["release_at", "order_in_batch"],
-                "indexes": [
-                    models.Index(
+            },
+        ),
+        migrations.RunSQL(
+            sql="""
+                CREATE INDEX IF NOT EXISTS bubbles_sch_bub_rel_idx
+                ON bubbles_scheduledmessage (bubble_id, released_at, release_at);
+            """,
+            reverse_sql="DROP INDEX IF EXISTS bubbles_sch_bub_rel_idx;",
+            state_operations=[
+                migrations.AddIndex(
+                    model_name="scheduledmessage",
+                    index=models.Index(
                         fields=["bubble", "released_at", "release_at"],
                         name="bubbles_sch_bub_rel_idx",
                     ),
-                ],
-            },
+                ),
+            ],
         ),
     ]
