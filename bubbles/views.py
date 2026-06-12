@@ -23,6 +23,7 @@ from .serializers import (
 )
 from .membership import membership_clear
 from .image_utils import chat_image_upload_path, optimize_chat_image
+from .similarity import is_similar_enough, similar_bubble_score
 from .services import (
     active_user_count,
     broadcast_message,
@@ -112,6 +113,61 @@ def bubbles_nearby(request):
 
     results.sort(key=lambda r: r["distance_m"])
     return Response({"results": results})
+
+
+@api_view(["GET"])
+@ratelimit(key="ip", rate="120/m", method="GET")
+def bubbles_similar(request):
+    """Find active nearby bubbles with similar titles to reduce fragmentation."""
+    query = (request.GET.get("q") or "").strip()
+    if len(query) < 2:
+        return Response({"results": []})
+
+    try:
+        lat = _parse_coord(request.GET.get("lat"), "lat", -90, 90)
+        lng = _parse_coord(request.GET.get("lng"), "lng", -180, 180)
+        search_radius_m = int(request.GET.get("search_radius_m", "10000"))
+    except ValueError as e:
+        return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    if search_radius_m < 100 or search_radius_m > 200_000:
+        return Response(
+            {"detail": "search_radius_m must be between 100 and 200000."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    now = timezone.now()
+    qs = Bubble.objects.filter(active=True, expires_at__gt=now).only(
+        "id",
+        "title",
+        "latitude",
+        "longitude",
+        "radius",
+        "expires_at",
+        "active",
+        "created_at",
+    )
+
+    scored: list[dict] = []
+    for b in qs:
+        dist = haversine_distance_m(lat, lng, b.latitude, b.longitude)
+        if dist > search_radius_m:
+            continue
+        score = similar_bubble_score(query, b.title)
+        if not is_similar_enough(score):
+            continue
+        summary = serialize_bubble_summary(b, lat, lng)
+        summary["similarity_score"] = round(score, 2)
+        scored.append(summary)
+
+    scored.sort(
+        key=lambda r: (
+            -r["similarity_score"],
+            -(r.get("active_users") or 0),
+            r["distance_m"],
+        )
+    )
+    return Response({"results": scored[:6]})
 
 
 @api_view(["GET"])
