@@ -91,22 +91,25 @@
             <div class="home-feed-handle" aria-hidden="true"></div>
 
             <div class="feed-search-sticky" id="feed-search-wrap">
-              <label class="feed-search" for="feed-search">
-                <svg class="feed-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <circle cx="11" cy="11" r="7"/>
-                  <path d="M20 20l-3.5-3.5"/>
-                </svg>
-                <input
-                  type="search"
-                  id="feed-search"
-                  class="feed-search-input"
-                  placeholder="Search communities…"
-                  autocomplete="off"
-                  enterkeyhint="search"
-                  autocapitalize="off"
-                  spellcheck="false"
-                />
-              </label>
+              <div class="feed-search-row">
+                <label class="feed-search" for="feed-search">
+                  <svg class="feed-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="M20 20l-3.5-3.5"/>
+                  </svg>
+                  <input
+                    type="search"
+                    id="feed-search"
+                    class="feed-search-input"
+                    placeholder="Search communities…"
+                    autocomplete="off"
+                    enterkeyhint="search"
+                    autocapitalize="off"
+                    spellcheck="false"
+                  />
+                </label>
+                <button type="button" class="feed-search-cancel" id="feed-search-cancel" hidden>Cancel</button>
+              </div>
             </div>
 
             <div class="home-feed" id="home-feed">
@@ -114,6 +117,17 @@
                 <div class="bubble-card-skeleton"></div>
                 <div class="bubble-card-skeleton"></div>
                 <div class="bubble-card-skeleton"></div>
+              </div>
+
+              <section class="feed-section" id="feed-recent-searches-section" hidden>
+                <div class="feed-section-head">
+                  <h2 class="feed-section-title">Recent searches</h2>
+                </div>
+                <ul class="feed-recent-searches-list" id="feed-recent-searches-list"></ul>
+              </section>
+
+              <div class="feed-search-hint" id="feed-search-hint" hidden>
+                <p>Find communities by name — try "tech", "book", or "food"</p>
               </div>
 
               <section class="feed-section" id="feed-search-section" hidden>

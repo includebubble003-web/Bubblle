@@ -22,6 +22,7 @@ import {
   geolocationPermissionState,
   requestLocationOnce,
 } from "./geo.js";
+import { safeGetItem, safeSetItem } from "./client-state.js";
 
 let map = null;
 let userMarker = null;
@@ -371,11 +372,19 @@ function bindFeedCard(el) {
   el.addEventListener("click", (e) => {
     if (e.target.closest(".bubble-card-join")) return;
     e.preventDefault();
+    if (feedSearchModeActive && isMobileSearchLayout()) {
+      completeSearchSelection(el.dataset.bubbleId);
+      return;
+    }
     selectBubble(el.dataset.bubbleId, { scroll: false, pan: true });
   });
   el.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
+      if (feedSearchModeActive && isMobileSearchLayout()) {
+        completeSearchSelection(el.dataset.bubbleId);
+        return;
+      }
       selectBubble(el.dataset.bubbleId, { scroll: false, pan: true });
     }
   });
@@ -479,6 +488,119 @@ function renderFeedSection(sectionId, containerId, items, options = {}) {
 }
 
 let feedSearchQuery = "";
+let feedSearchModeActive = false;
+
+const RECENT_SEARCHES_KEY = "bbl_recent_searches";
+const MAX_RECENT_SEARCHES = 8;
+const MOBILE_SEARCH_MQ = "(max-width: 900px)";
+
+function isMobileSearchLayout() {
+  return window.matchMedia(MOBILE_SEARCH_MQ).matches;
+}
+
+function getRecentSearches() {
+  try {
+    const raw = safeGetItem(RECENT_SEARCHES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((entry) => typeof entry === "string" && entry.trim())
+      .slice(0, MAX_RECENT_SEARCHES);
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentSearch(query) {
+  const q = query.trim();
+  if (!q) return;
+  const recent = getRecentSearches().filter((entry) => entry !== q);
+  recent.unshift(q);
+  safeSetItem(RECENT_SEARCHES_KEY, JSON.stringify(recent.slice(0, MAX_RECENT_SEARCHES)));
+}
+
+function hideSearchAuxiliarySections() {
+  $("#feed-recent-searches-section")?.setAttribute("hidden", "hidden");
+  $("#feed-recent-searches-list")?.replaceChildren();
+  $("#feed-search-hint")?.setAttribute("hidden", "hidden");
+  $("#feed-search-section")?.setAttribute("hidden", "hidden");
+  $("#feed-search-results")?.replaceChildren();
+  $("#feed-search-empty")?.setAttribute("hidden", "hidden");
+}
+
+function renderRecentSearches() {
+  const section = $("#feed-recent-searches-section");
+  const list = $("#feed-recent-searches-list");
+  const hint = $("#feed-search-hint");
+  const recent = getRecentSearches();
+
+  hideSearchAuxiliarySections();
+
+  if (!recent.length) {
+    hint?.removeAttribute("hidden");
+    return;
+  }
+
+  section?.removeAttribute("hidden");
+  list?.replaceChildren(
+    ...recent.map((query) => {
+      const li = document.createElement("li");
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "feed-recent-search-item";
+      btn.innerHTML = `<svg class="feed-recent-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 8v5l3 2"/><circle cx="12" cy="12" r="9"/></svg><span>${escapeHtml(query)}</span>`;
+      btn.addEventListener("click", () => {
+        feedSearchQuery = query;
+        const input = $("#feed-search");
+        if (input) input.value = query;
+        renderBubbleFeed(hooks.getNearbyBubbles?.() || []);
+      });
+      li.appendChild(btn);
+      return li;
+    }),
+  );
+}
+
+function setSearchModeUi(active) {
+  $("#home-split")?.classList.toggle("home-split--search-mode", active);
+  $("#map-screen")?.classList.toggle("home-screen--search-mode", active);
+  $("#feed-search-cancel")?.toggleAttribute("hidden", !active);
+  const fab = $("#fab-create");
+  if (active) fab?.setAttribute("hidden", "hidden");
+  else fab?.removeAttribute("hidden");
+}
+
+function enterSearchMode() {
+  if (!isMobileSearchLayout() || feedSearchModeActive) return;
+  feedSearchModeActive = true;
+  setSearchModeUi(true);
+  $("#home-feed")?.scrollTo({ top: 0 });
+  $("#home-feed-scroll")?.scrollTo({ top: 0 });
+  renderBubbleFeed(hooks.getNearbyBubbles?.() || []);
+}
+
+function exitSearchMode({ clearQuery = false, blurInput = false } = {}) {
+  if (!feedSearchModeActive && !clearQuery) return;
+  feedSearchModeActive = false;
+  setSearchModeUi(false);
+  if (clearQuery) {
+    feedSearchQuery = "";
+    const input = $("#feed-search");
+    if (input) input.value = "";
+  }
+  if (blurInput) $("#feed-search")?.blur();
+  renderBubbleFeed(hooks.getNearbyBubbles?.() || []);
+  if (map) {
+    setTimeout(() => map.invalidateSize(), 360);
+  }
+}
+
+function completeSearchSelection(bubbleId) {
+  saveRecentSearch(feedSearchQuery);
+  exitSearchMode({ clearQuery: true });
+  window.location.href = bubbleHref(bubbleId);
+}
 
 function normalizeSearchText(text) {
   return String(text || "")
@@ -566,8 +688,12 @@ function renderSearchFeed(bubbles, query) {
   const results = sortByDistance(filterBubblesBySearch(bubbles, query));
 
   hideStandardFeedSections();
+  $("#feed-recent-searches-section")?.setAttribute("hidden", "hidden");
+  $("#feed-recent-searches-list")?.replaceChildren();
+  $("#feed-search-hint")?.setAttribute("hidden", "hidden");
   $("#home-empty")?.setAttribute("hidden", "hidden");
   $("#home-feed")?.classList.remove("home-feed--empty");
+  document.querySelector(".home-legal-footer")?.toggleAttribute("hidden", feedSearchModeActive);
 
   if (!results.length) {
     searchSection?.setAttribute("hidden", "hidden");
@@ -585,34 +711,51 @@ function renderSearchFeed(bubbles, query) {
   syncFeedSection(searchResults, results, { allBubbles: bubbles });
 }
 
+function renderSearchModeFeed(bubbles, query) {
+  hideStandardFeedSections();
+  $("#home-empty")?.setAttribute("hidden", "hidden");
+  $("#home-feed")?.classList.remove("home-feed--empty");
+  document.querySelector(".home-legal-footer")?.setAttribute("hidden", "hidden");
+
+  if (query.length > 0) {
+    renderSearchFeed(bubbles, query);
+    return;
+  }
+
+  hideSearchAuxiliarySections();
+  renderRecentSearches();
+}
+
 function renderBubbleFeed(bubbles) {
   const hasPos = !!hooks.hasPosition?.();
   const emptyEl = $("#home-empty");
   const feedEl = $("#home-feed");
   const feedScroll = $("#home-feed-scroll");
   const query = feedSearchQuery.trim();
-  const isSearching = query.length > 0;
+  const inSearchMode = feedSearchModeActive && isMobileSearchLayout();
+  const isFiltering = query.length > 0;
 
-  const scrollTop = feedScroll?.scrollTop ?? 0;
+  const scrollTop = inSearchMode ? (feedEl?.scrollTop ?? 0) : (feedScroll?.scrollTop ?? 0);
 
   setFeedLoading(false);
   feedLoadedOnce = true;
 
   if (!hasPos) {
     hideStandardFeedSections();
-    $("#feed-search-section")?.setAttribute("hidden", "hidden");
-    $("#feed-search-results")?.replaceChildren();
-    $("#feed-search-empty")?.setAttribute("hidden", "hidden");
+    hideSearchAuxiliarySections();
     emptyEl?.setAttribute("hidden", "hidden");
     return;
   }
 
-  if (isSearching) {
+  if (inSearchMode) {
+    renderSearchModeFeed(bubbles, query);
+  } else if (isFiltering) {
+    hideSearchAuxiliarySections();
+    document.querySelector(".home-legal-footer")?.removeAttribute("hidden");
     renderSearchFeed(bubbles, query);
   } else {
-    $("#feed-search-section")?.setAttribute("hidden", "hidden");
-    $("#feed-search-results")?.replaceChildren();
-    $("#feed-search-empty")?.setAttribute("hidden", "hidden");
+    hideSearchAuxiliarySections();
+    document.querySelector(".home-legal-footer")?.removeAttribute("hidden");
     renderStandardFeedSections(bubbles);
 
     const showEmpty = bubbles.length === 0;
@@ -629,7 +772,9 @@ function renderBubbleFeed(bubbles) {
     });
   }
 
-  if (feedScroll && feedScroll.scrollTop !== scrollTop) {
+  if (inSearchMode) {
+    if (feedEl && feedEl.scrollTop !== scrollTop) feedEl.scrollTop = scrollTop;
+  } else if (feedScroll && feedScroll.scrollTop !== scrollTop) {
     feedScroll.scrollTop = scrollTop;
   }
 }
@@ -650,6 +795,8 @@ function setFeedLoading(loading) {
     $("#feed-discover-section")?.setAttribute("hidden", "hidden");
     $("#feed-search-section")?.setAttribute("hidden", "hidden");
     $("#feed-search-empty")?.setAttribute("hidden", "hidden");
+    $("#feed-recent-searches-section")?.setAttribute("hidden", "hidden");
+    $("#feed-search-hint")?.setAttribute("hidden", "hidden");
     $("#home-empty")?.setAttribute("hidden", "hidden");
   }
 }
@@ -896,13 +1043,34 @@ function setupMapUi() {
     $("#fab-create")?.click();
   });
 
+  $("#feed-search")?.addEventListener("focus", () => {
+    if (isMobileSearchLayout()) enterSearchMode();
+  });
+
   $("#feed-search")?.addEventListener("input", (e) => {
     feedSearchQuery = e.target.value || "";
-    const bubbles = hooks.getNearbyBubbles?.() || [];
-    renderBubbleFeed(bubbles);
+    renderBubbleFeed(hooks.getNearbyBubbles?.() || []);
+  });
+
+  $("#feed-search-cancel")?.addEventListener("click", () => {
+    exitSearchMode({ clearQuery: true, blurInput: true });
+  });
+
+  $("#home-feed")?.addEventListener("click", (e) => {
+    const join = e.target.closest(".bubble-card-join");
+    if (!join || !feedSearchModeActive || !isMobileSearchLayout()) return;
+    saveRecentSearch(feedSearchQuery);
+    exitSearchMode({ clearQuery: true });
+  });
+
+  window.addEventListener("resize", () => {
+    if (feedSearchModeActive && !isMobileSearchLayout()) {
+      exitSearchMode({ clearQuery: false });
+    }
   });
 
   $("#feed-search-empty-create")?.addEventListener("click", () => {
+    exitSearchMode({ clearQuery: false });
     $("#fab-create")?.click();
   });
 

@@ -202,9 +202,34 @@
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
+.feed-search-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.feed-search-cancel {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  color: #00c9a7;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  padding: 8px 2px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.feed-search-cancel:active {
+  opacity: 0.7;
+}
+
 .feed-search {
   display: block;
   position: relative;
+  flex: 1;
+  min-width: 0;
 }
 
 .feed-search-icon {
@@ -305,6 +330,136 @@
 
 .feed-search-empty-create:active {
   transform: scale(0.98);
+}
+
+.feed-recent-searches-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.feed-recent-search-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #e8eaef;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.feed-recent-search-item:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.feed-recent-search-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: #6b7289;
+}
+
+.feed-search-hint {
+  padding: 20px 8px 8px;
+  text-align: center;
+}
+
+.feed-search-hint p {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: #8b92a8;
+}
+
+/* Mobile search mode — full-screen results, map collapsed */
+@media (max-width: 900px) {
+  .home-map-pane {
+    transition:
+      max-height 0.32s ease,
+      opacity 0.28s ease,
+      padding 0.32s ease;
+  }
+
+  .home-map-wrap {
+    transition:
+      height 0.32s ease,
+      opacity 0.28s ease;
+  }
+
+  .home-split--search-mode .home-map-pane {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .home-split--search-mode .home-map-wrap {
+    height: 0;
+    opacity: 0;
+    overflow: hidden;
+  }
+
+  .home-split--search-mode {
+    min-height: 0;
+  }
+
+  .home-split--search-mode .home-feed-pane {
+    margin-top: 0;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .home-split--search-mode .home-feed-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    border-radius: 18px 18px 0 0;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .home-split--search-mode .home-feed-handle {
+    display: none;
+  }
+
+  .home-split--search-mode .feed-search-sticky {
+    position: relative;
+    top: auto;
+    flex-shrink: 0;
+    margin-bottom: 0;
+    padding-bottom: 10px;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  .home-split--search-mode .home-feed {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding-top: 8px;
+  }
+
+  .home-screen--search-mode .home-fab {
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.85);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
 }
 
 /* Onboarding overlay */
