@@ -356,8 +356,14 @@ export function showQuestionPage() {
   $("#chat-panel")?.setAttribute("hidden", "hidden");
   $("#chat-composer")?.setAttribute("hidden", "hidden");
   $("#question-composer")?.removeAttribute("hidden");
-  document.getElementById("chat-app")?.classList.remove("chat-app--home", "chat-app--room");
-  document.getElementById("chat-app")?.classList.add("chat-app--question");
+  if (isMobileAnswerLayout()) {
+    $("#sidebar")?.setAttribute("hidden", "hidden");
+    $("#drawer-backdrop")?.setAttribute("hidden", "hidden");
+    document.body.classList.remove("drawer-open");
+  }
+  const app = document.getElementById("chat-app");
+  app?.classList.remove("chat-app--home", "chat-app--room");
+  app?.classList.add("chat-app--question");
 }
 
 export async function initQuestionPage(callbacks) {

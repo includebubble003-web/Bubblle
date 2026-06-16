@@ -28,7 +28,7 @@
 
   <div class="chat-main">
     <!-- Conversation-first landing (home) -->
-    <section class="home-screen" id="map-screen" aria-label="Nearby conversations">
+    <section class="home-screen" id="map-screen" {% if question_id or bubble_id %}hidden{% endif %} aria-label="Nearby conversations">
       <header class="home-header">
         <a href="/" class="brand home-brand">
           <span class="brand-mark" aria-hidden="true">
