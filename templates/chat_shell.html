@@ -11,7 +11,7 @@
 {% endblock %}
 {% block body_class %}chat-body{% endblock %}
 {% block body %}
-<div class="chat-app {% if bubble_id %}chat-app--room{% else %}chat-app--home{% endif %}" id="chat-app">
+<div class="chat-app {% if bubble_id %}chat-app--room{% elif question_id %}chat-app--question{% else %}chat-app--home{% endif %}" id="chat-app">
   <div class="drawer-backdrop" id="drawer-backdrop" hidden aria-hidden="true"></div>
 
   <aside class="sidebar" id="sidebar" aria-label="Nearby bubbles">
@@ -91,6 +91,22 @@
             <div class="home-feed-handle" aria-hidden="true"></div>
 
             <div class="feed-search-sticky" id="feed-search-wrap">
+              <div class="home-action-row">
+                <button type="button" class="home-action-btn home-action-btn--ask" id="btn-ask-question">
+                  <svg class="home-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9"/>
+                    <path d="M9.5 9a2.5 2.5 0 1 1 4.2 1.8c-.9.7-1.2 1.3-1.2 2.2"/>
+                    <circle cx="12" cy="17" r="0.75" fill="currentColor"/>
+                  </svg>
+                  Ask a Question
+                </button>
+                <button type="button" class="home-action-btn home-action-btn--create" id="btn-create-community">
+                  <svg class="home-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14"/>
+                  </svg>
+                  Create Community
+                </button>
+              </div>
               <div class="feed-search-row">
                 <label class="feed-search" for="feed-search">
                   <svg class="feed-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -101,7 +117,7 @@
                     type="search"
                     id="feed-search"
                     class="feed-search-input"
-                    placeholder="Search communities…"
+                    placeholder="Search communities & questions…"
                     autocomplete="off"
                     enterkeyhint="search"
                     autocapitalize="off"
@@ -127,8 +143,24 @@
               </section>
 
               <div class="feed-search-hint" id="feed-search-hint" hidden>
-                <p>Find communities by name — try "tech", "book", or "food"</p>
+                <p>Find communities and questions — try "coffee", "gym", or "react"</p>
               </div>
+
+              <section class="feed-section" id="feed-search-questions-section" hidden>
+                <div class="feed-section-head">
+                  <h2 class="feed-section-title">Questions</h2>
+                  <span class="feed-section-sub" id="feed-search-questions-count"></span>
+                </div>
+                <div class="feed-card-list" id="feed-search-questions"></div>
+              </section>
+
+              <section class="feed-section" id="feed-search-communities-section" hidden>
+                <div class="feed-section-head">
+                  <h2 class="feed-section-title">Communities</h2>
+                  <span class="feed-section-sub" id="feed-search-communities-count"></span>
+                </div>
+                <div class="feed-card-list" id="feed-search-communities"></div>
+              </section>
 
               <section class="feed-section" id="feed-search-section" hidden>
                 <div class="feed-section-head">
@@ -145,10 +177,21 @@
                     <path d="M20 20l-3.5-3.5"/>
                   </svg>
                 </div>
-                <p class="feed-search-empty-title">No communities found</p>
-                <p class="feed-search-empty-lead">Try another keyword or create a new community.</p>
-                <button type="button" class="feed-search-empty-create" id="feed-search-empty-create">Create community</button>
+                <p class="feed-search-empty-title">No results found</p>
+                <p class="feed-search-empty-lead">Try another keyword, ask a question, or create a community.</p>
+                <div class="feed-search-empty-actions">
+                  <button type="button" class="feed-search-empty-create" id="feed-search-empty-ask">Ask a question</button>
+                  <button type="button" class="feed-search-empty-create feed-search-empty-create--secondary" id="feed-search-empty-create">Create community</button>
+                </div>
               </div>
+
+              <section class="feed-section feed-section--questions" id="feed-questions-section" hidden>
+                <div class="feed-section-head">
+                  <h2 class="feed-section-title">Questions Around You</h2>
+                  <span class="feed-section-sub">Local answers from nearby people</span>
+                </div>
+                <div class="feed-card-list" id="feed-questions"></div>
+              </section>
 
               <section class="feed-section feed-section--recommended" id="feed-recommended-section" hidden>
                 <div class="feed-section-head">
@@ -215,6 +258,30 @@
 
     <div id="sheet-backdrop" class="sheet-backdrop" hidden></div>
 
+    <div id="ask-question-sheet" class="bottom-sheet" hidden role="dialog" aria-label="Ask a question">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="sheet-header">
+        <div>
+          <h2 class="sheet-title">Ask a question</h2>
+          <p class="sheet-sub">Get answers from people nearby — anonymously</p>
+        </div>
+        <button type="button" class="sheet-close btn-icon-only" id="ask-question-close" aria-label="Close">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <form id="ask-question-form" class="create-sheet-form">
+        <input id="ask-question-title" name="title" maxlength="200" required placeholder="What do you want to know?" autocomplete="off" />
+        <textarea id="ask-question-desc" name="description" maxlength="1000" rows="3" placeholder="Add details (optional)…"></textarea>
+        <label class="ask-question-label" for="ask-question-community">Link to a community (optional)</label>
+        <select id="ask-question-community" class="ask-question-select" aria-label="Optional community">
+          <option value="">No community — ask everyone nearby</option>
+        </select>
+        <p class="create-sheet-hint">Your question is visible to people within 5 km.</p>
+        <p class="sheet-error" id="ask-question-error" hidden></p>
+        <button type="submit" class="btn-sheet-primary" id="ask-question-submit">Post question</button>
+      </form>
+    </div>
+
     <div id="create-sheet" class="bottom-sheet" hidden role="dialog" aria-label="Create bubble">
       <div class="sheet-handle" aria-hidden="true"></div>
       <div class="sheet-header">
@@ -241,6 +308,55 @@
         <button type="submit" class="btn-sheet-primary" id="create-bubble-submit">Create &amp; join</button>
       </form>
     </div>
+
+    <section class="question-screen" id="question-screen" {% if not question_id %}hidden{% endif %} aria-label="Question discussion">
+      <header class="chat-topbar question-topbar">
+        <a href="/" class="btn-icon btn-back-map topbar-back" aria-label="Back to home" title="Back">
+          <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+        </a>
+        <div class="topbar-main">
+          <div class="room-header">
+            <div class="room-avatar topbar-desktop-only question-avatar" aria-hidden="true">?</div>
+            <div class="topbar-room">
+              <div class="topbar-room-head">
+                <h1 class="room-title" id="question-topbar-title">Question</h1>
+              </div>
+              <p class="question-page-meta" id="question-page-meta"></p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div class="question-panel">
+        <div class="question-header-card">
+          <h2 class="question-page-title" id="question-page-title">Loading…</h2>
+          <p class="question-page-description" id="question-page-description" hidden></p>
+          <p class="question-page-author muted" id="question-page-author"></p>
+          <p class="question-page-community" id="question-page-community" hidden></p>
+        </div>
+        <div class="question-replies-wrap">
+          <h3 class="question-replies-heading">Replies</h3>
+          <div class="question-replies-scroll" id="question-replies">
+            <div class="messages-placeholder state-panel" id="question-replies-placeholder">
+              <div class="state-icon state-icon-pulse" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v6h-6"/></svg>
+              </div>
+              <p class="state-text muted">Loading replies…</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer class="question-composer" id="question-composer" {% if not question_id %}hidden{% endif %}>
+        <form id="question-reply-form" class="composer-form question-reply-form">
+          <textarea id="question-reply-input" class="chat-input" rows="1" maxlength="2000" placeholder="Share your answer…" disabled aria-label="Your reply"></textarea>
+          <button class="btn btn-primary btn-send" type="submit" id="question-reply-send" disabled aria-label="Post reply">
+            <svg class="icon icon-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
+            <span class="btn-send-label">Reply</span>
+          </button>
+        </form>
+      </footer>
+    </section>
 
     <!-- Chat room UI -->
     <header class="chat-topbar">
@@ -406,6 +522,7 @@
 {% block scripts %}
 <script>
   window.__BUBBLE_ID__ = "{{ bubble_id|default:'' }}";
+  window.__QUESTION_ID__ = "{{ question_id|default:'' }}";
   window.__BUBBLLE_CLIENT_VERSION__ = "{{ BUBBLLE_CLIENT_VERSION|default:'2' }}";
 </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>

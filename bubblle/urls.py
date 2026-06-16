@@ -13,6 +13,7 @@ urlpatterns = [
     path("terms/", TermsOfServiceView.as_view(), name="terms-of-service"),
     path("", ChatShellView.as_view(), name="home"),
     path("bubble/<uuid:bubble_id>/", ChatShellView.as_view(), name="bubble-page"),
+    path("question/<uuid:question_id>/", ChatShellView.as_view(), name="question-page"),
 ]
 
 if settings.MEDIA_URL and settings.MEDIA_ROOT:

@@ -2,7 +2,7 @@ from django.conf import settings
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import Bubble, Message
+from .models import Bubble, Message, Question, Reply
 from .services import message_image_url
 
 
@@ -84,3 +84,55 @@ class MessageOutSerializer(serializers.ModelSerializer):
         if reply_image_url:
             out["image_url"] = reply_image_url
         return out
+
+
+class QuestionCreateSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=200, trim_whitespace=True)
+    description = serializers.CharField(
+        max_length=1000, required=False, allow_blank=True, trim_whitespace=True
+    )
+    latitude = serializers.FloatField(min_value=-90, max_value=90)
+    longitude = serializers.FloatField(min_value=-180, max_value=180)
+    bubble_id = serializers.UUIDField(required=False, allow_null=True)
+
+    def validate_title(self, value: str) -> str:
+        title = value.strip()
+        if len(title) < 3:
+            raise serializers.ValidationError("Title must be at least 3 characters.")
+        return title
+
+
+class ReplyCreateSerializer(serializers.Serializer):
+    message = serializers.CharField(max_length=2000, trim_whitespace=True)
+    latitude = serializers.FloatField(min_value=-90, max_value=90)
+    longitude = serializers.FloatField(min_value=-180, max_value=180)
+
+
+class ReplyOutSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Reply
+        fields = ("id", "anonymous_name", "message", "created_at")
+
+
+class QuestionOutSerializer(serializers.ModelSerializer):
+    reply_count = serializers.IntegerField(read_only=True)
+    distance_m = serializers.FloatField(read_only=True, required=False)
+    bubble_title = serializers.CharField(source="bubble.title", read_only=True, default=None)
+    bubble_id = serializers.UUIDField(source="bubble.id", read_only=True, allow_null=True)
+
+    class Meta:
+        model = Question
+        fields = (
+            "id",
+            "title",
+            "description",
+            "anonymous_name",
+            "latitude",
+            "longitude",
+            "bubble_id",
+            "bubble_title",
+            "created_at",
+            "last_activity_at",
+            "reply_count",
+            "distance_m",
+        )
