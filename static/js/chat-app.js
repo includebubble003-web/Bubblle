@@ -21,7 +21,7 @@ import {
   setHomeFeedLoading,
   showOnboarding,
 } from "./map-home.js";
-import { initQuestionPage } from "./question-page.js";
+import { initQuestionPage, refreshQuestionComposer, teardownQuestionPage } from "./question-page.js";
 import { hasInterestProfile } from "./interests.js";
 
 const $ = (sel) => document.querySelector(sel);
@@ -272,6 +272,7 @@ function applyPosition(p, { quiet = false } = {}) {
     const input = $("#question-reply-input");
     const btn = $("#question-reply-send");
     if (input) input.disabled = false;
+    refreshQuestionComposer();
     if (btn) btn.disabled = !(input?.value || "").trim();
   }
 }
@@ -1559,6 +1560,7 @@ async function main() {
     stopNearbyPolling();
     if (stopLocation) stopLocation();
     teardownChat();
+    teardownQuestionPage();
     if (sendCooldownTick) clearInterval(sendCooldownTick);
   });
 

@@ -4,10 +4,21 @@
 import { fmtQuestionDistance, fmtReplyCount, questionHref } from "./questions.js";
 
 const API_FETCH = { credentials: "include", cache: "no-store" };
+const MOBILE_ANSWER_MQ = "(max-width: 900px)";
+const REPLY_MIN_LINES = 3;
+const REPLY_MAX_LINES = 6;
+const REPLY_LINE_HEIGHT_PX = 22;
 
 let hooks = {};
 let questionData = null;
 let replyPollTimer = null;
+let answerModeActive = false;
+let answerBlurTimer = null;
+let viewportHandler = null;
+
+function isMobileAnswerLayout() {
+  return window.matchMedia(MOBILE_ANSWER_MQ).matches;
+}
 
 function $(sel) {
   return document.querySelector(sel);
@@ -107,7 +118,115 @@ function renderReplies(replies) {
       return wrap.firstElementChild;
     }),
   );
-  list.scrollTop = list.scrollHeight;
+  scrollToLatestReply();
+}
+
+function scrollToLatestReply({ smooth = false } = {}) {
+  const list = $("#question-replies");
+  if (!list) return;
+  const top = list.scrollHeight;
+  list.scrollTo({ top, behavior: smooth ? "smooth" : "auto" });
+}
+
+function setAnswerMode(active) {
+  answerModeActive = active;
+  $("#question-screen")?.classList.toggle("question-screen--answer-mode", active);
+  applyViewportLayout();
+  if (active) {
+    requestAnimationFrame(() => scrollToLatestReply());
+  }
+}
+
+function enterAnswerMode() {
+  if (!isMobileAnswerLayout()) return;
+  setAnswerMode(true);
+}
+
+function scheduleExitAnswerMode() {
+  if (answerBlurTimer) clearTimeout(answerBlurTimer);
+  answerBlurTimer = setTimeout(() => {
+    answerBlurTimer = null;
+    const input = $("#question-reply-input");
+    if (document.activeElement === input) return;
+    setAnswerMode(false);
+  }, 120);
+}
+
+function keyboardInsetPx() {
+  const vv = window.visualViewport;
+  if (!vv) return 0;
+  return Math.max(0, window.innerHeight - (vv.offsetTop + vv.height));
+}
+
+function applyViewportLayout() {
+  const screen = $("#question-screen");
+  if (!screen) return;
+
+  if (!isMobileAnswerLayout() || !answerModeActive) {
+    screen.style.height = "";
+    screen.style.transform = "";
+    document.documentElement.style.removeProperty("--question-kb-inset");
+    return;
+  }
+
+  const vv = window.visualViewport;
+  if (!vv) return;
+
+  const inset = keyboardInsetPx();
+  document.documentElement.style.setProperty("--question-kb-inset", `${inset}px`);
+
+  if (inset > 0) {
+    screen.style.height = `${vv.height}px`;
+    screen.style.transform = `translateY(${vv.offsetTop}px)`;
+  } else {
+    screen.style.height = "";
+    screen.style.transform = "";
+  }
+
+  requestAnimationFrame(() => scrollToLatestReply());
+}
+
+function setupViewportListeners() {
+  if (!window.visualViewport || viewportHandler) return;
+
+  viewportHandler = () => {
+    applyViewportLayout();
+    if (answerModeActive && keyboardInsetPx() === 0) {
+      const input = $("#question-reply-input");
+      if (document.activeElement !== input) setAnswerMode(false);
+    }
+  };
+
+  window.visualViewport.addEventListener("resize", viewportHandler);
+  window.visualViewport.addEventListener("scroll", viewportHandler);
+  window.addEventListener("resize", viewportHandler);
+}
+
+function teardownViewportListeners() {
+  if (viewportHandler && window.visualViewport) {
+    window.visualViewport.removeEventListener("resize", viewportHandler);
+    window.visualViewport.removeEventListener("scroll", viewportHandler);
+  }
+  window.removeEventListener("resize", viewportHandler || (() => {}));
+  viewportHandler = null;
+  document.documentElement.style.removeProperty("--question-kb-inset");
+  $("#question-screen")?.classList.remove("question-screen--answer-mode");
+  const screen = $("#question-screen");
+  if (screen) {
+    screen.style.height = "";
+    screen.style.transform = "";
+  }
+}
+
+function autoResizeReplyInput() {
+  const el = $("#question-reply-input");
+  if (!el) return;
+  el.style.height = "auto";
+  const minH = REPLY_LINE_HEIGHT_PX * REPLY_MIN_LINES;
+  const maxH = REPLY_LINE_HEIGHT_PX * REPLY_MAX_LINES;
+  const next = Math.min(Math.max(el.scrollHeight, minH), maxH);
+  el.style.height = `${next}px`;
+  el.style.overflowY = el.scrollHeight > maxH ? "auto" : "hidden";
 }
 
 async function loadQuestion() {
@@ -165,7 +284,7 @@ async function submitReply(text) {
     const wrap = document.createElement("div");
     wrap.innerHTML = replyHtml(reply);
     list.appendChild(wrap.firstElementChild);
-    list.scrollTop = list.scrollHeight;
+    scrollToLatestReply({ smooth: true });
   }
   if (questionData) {
     questionData.reply_count = (questionData.reply_count || 0) + 1;
@@ -184,9 +303,22 @@ function setupComposer() {
     const ready = !!hooks.getPosition?.();
     input.disabled = !ready;
     if (btn) btn.disabled = !ready || !(input.value || "").trim();
+    autoResizeReplyInput();
   };
 
   input.addEventListener("input", tryEnable);
+  input.addEventListener("focus", () => {
+    if (answerBlurTimer) {
+      clearTimeout(answerBlurTimer);
+      answerBlurTimer = null;
+    }
+    enterAnswerMode();
+  });
+  input.addEventListener("blur", scheduleExitAnswerMode);
+
+  btn?.addEventListener("mousedown", (e) => e.preventDefault());
+
+  autoResizeReplyInput();
   tryEnable();
 
   form.addEventListener("submit", async (e) => {
@@ -195,7 +327,11 @@ function setupComposer() {
     if (!text) return;
     if (btn) btn.disabled = true;
     const ok = await submitReply(text);
-    if (ok) input.value = "";
+    if (ok) {
+      input.value = "";
+      autoResizeReplyInput();
+      scrollToLatestReply({ smooth: true });
+    }
     tryEnable();
   });
 }
@@ -230,6 +366,7 @@ export async function initQuestionPage(callbacks) {
 
   showQuestionPage();
   setupComposer();
+  setupViewportListeners();
 
   try {
     if (!hooks.getPosition?.()) await hooks.ensureLocation?.();
@@ -239,7 +376,10 @@ export async function initQuestionPage(callbacks) {
 
     const input = $("#question-reply-input");
     const btn = $("#question-reply-send");
-    if (input) input.disabled = false;
+    if (input) {
+      input.disabled = false;
+      refreshQuestionComposer();
+    }
     if (btn) btn.disabled = !(input?.value || "").trim();
   } catch {
     const placeholder = $("#question-replies-placeholder");
@@ -251,8 +391,18 @@ export async function initQuestionPage(callbacks) {
   }
 }
 
+export function refreshQuestionComposer() {
+  autoResizeReplyInput();
+}
+
 export function teardownQuestionPage() {
   stopReplyPolling();
+  teardownViewportListeners();
+  if (answerBlurTimer) {
+    clearTimeout(answerBlurTimer);
+    answerBlurTimer = null;
+  }
+  answerModeActive = false;
 }
 
 export { questionHref };

@@ -327,16 +327,16 @@
         </div>
       </header>
 
-      <div class="question-panel">
-        <div class="question-header-card">
+      <div class="question-body" id="question-body">
+        <div class="question-header-card" id="question-header-card">
           <h2 class="question-page-title" id="question-page-title">Loading…</h2>
           <p class="question-page-description" id="question-page-description" hidden></p>
           <p class="question-page-author muted" id="question-page-author"></p>
           <p class="question-page-community" id="question-page-community" hidden></p>
         </div>
-        <div class="question-replies-wrap">
+        <div class="question-replies-area" id="question-replies-area">
           <h3 class="question-replies-heading">Replies</h3>
-          <div class="question-replies-scroll" id="question-replies">
+          <div class="question-replies-scroll" id="question-replies" role="list">
             <div class="messages-placeholder state-panel" id="question-replies-placeholder">
               <div class="state-icon state-icon-pulse" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v6h-6"/></svg>
@@ -349,7 +349,7 @@
 
       <footer class="question-composer" id="question-composer" {% if not question_id %}hidden{% endif %}>
         <form id="question-reply-form" class="composer-form question-reply-form">
-          <textarea id="question-reply-input" class="chat-input" rows="1" maxlength="2000" placeholder="Share your answer…" disabled aria-label="Your reply"></textarea>
+          <textarea id="question-reply-input" class="chat-input question-reply-input" rows="3" maxlength="2000" placeholder="Share your answer…" disabled aria-label="Your reply"></textarea>
           <button class="btn btn-primary btn-send" type="submit" id="question-reply-send" disabled aria-label="Post reply">
             <svg class="icon icon-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
             <span class="btn-send-label">Reply</span>
