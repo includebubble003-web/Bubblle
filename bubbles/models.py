@@ -83,3 +83,53 @@ class ScheduledMessage(models.Model):
 
     def __str__(self) -> str:
         return f"{self.anonymous_name}: {self.message[:40]}"
+
+
+class Question(models.Model):
+    """Location-scoped anonymous Q&A — independent of bubble chat."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True, default="")
+    anonymous_name = models.CharField(max_length=64)
+    latitude = models.FloatField()
+    longitude = models.FloatField()
+    bubble = models.ForeignKey(
+        Bubble,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="questions",
+    )
+    active = models.BooleanField(default=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_activity_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-last_activity_at"]
+        indexes = [
+            models.Index(fields=["active", "last_activity_at"]),
+            models.Index(fields=["bubble", "last_activity_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return self.title
+
+
+class Reply(models.Model):
+    """Anonymous answer to a question."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name="replies")
+    anonymous_name = models.CharField(max_length=64)
+    message = models.TextField(max_length=2000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        indexes = [
+            models.Index(fields=["question", "created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.anonymous_name}: {self.message[:40]}"

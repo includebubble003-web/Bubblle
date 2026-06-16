@@ -21,6 +21,7 @@ import {
   setHomeFeedLoading,
   showOnboarding,
 } from "./map-home.js";
+import { initQuestionPage } from "./question-page.js";
 import { hasInterestProfile } from "./interests.js";
 
 const $ = (sel) => document.querySelector(sel);
@@ -37,6 +38,7 @@ const MAX_IMAGE_DIMENSION = 1600;
 const IMAGE_JPEG_QUALITY = 0.85;
 
 const bubbleId = (window.__BUBBLE_ID__ || "").trim() || null;
+const questionId = (window.__QUESTION_ID__ || "").trim() || null;
 
 let myName = "";
 const myPreviousNames = new Set();
@@ -45,6 +47,7 @@ let discoveryCenter = null;
 let stopLocation = null;
 let nearbyPollTimer = null;
 let nearbyBubbles = [];
+let nearbyQuestions = [];
 let homeFeedLoadedOnce = false;
 let nearbyRefreshInFlight = null;
 
@@ -265,6 +268,12 @@ function applyPosition(p, { quiet = false } = {}) {
     onEnterBubble();
     refreshComposerAvailability();
   }
+  if (questionId) {
+    const input = $("#question-reply-input");
+    const btn = $("#question-reply-send");
+    if (input) input.disabled = false;
+    if (btn) btn.disabled = !(input?.value || "").trim();
+  }
 }
 
 function beginLocationWatch() {
@@ -416,18 +425,27 @@ async function refreshSidebar({ showLoading = false } = {}) {
 
   const promise = (async () => {
     try {
-      const res = await fetch(`/api/bubbles/nearby/?${params}`, API_FETCH);
-      if (!res.ok) {
+      const [bubbleRes, questionRes] = await Promise.all([
+        fetch(`/api/bubbles/nearby/?${params}`, API_FETCH),
+        fetch(`/api/questions/nearby/?${params}`, API_FETCH),
+      ]);
+      if (!bubbleRes.ok) {
         if (!homeFeedLoadedOnce) setBrowseEmpty("Could not load bubbles.");
         return;
       }
-      const data = await res.json();
-      nearbyBubbles = sortBubblesByActivity(data.results || []);
+      const bubbleData = await bubbleRes.json();
+      nearbyBubbles = sortBubblesByActivity(bubbleData.results || []);
+      if (questionRes.ok) {
+        const questionData = await questionRes.json();
+        nearbyQuestions = questionData.results || [];
+      } else {
+        nearbyQuestions = [];
+      }
       renderBubbleLists();
-      onMapBubblesUpdated(nearbyBubbles);
+      onMapBubblesUpdated(nearbyBubbles, nearbyQuestions);
       homeFeedLoadedOnce = true;
     } catch {
-      if (!homeFeedLoadedOnce) onMapBubblesUpdated([]);
+      if (!homeFeedLoadedOnce) onMapBubblesUpdated([], []);
     } finally {
       if (nearbyRefreshInFlight?.key === fetchKey) nearbyRefreshInFlight = null;
     }
@@ -1494,10 +1512,11 @@ async function main() {
   setupMediaUpload();
 
   initMapHome({
-    isRoom: () => !!bubbleId,
+    isRoom: () => !!bubbleId || !!questionId,
     hasPosition: () => !!pos,
     getPosition: () => pos,
     getNearbyBubbles: () => nearbyBubbles,
+    getNearbyQuestions: () => nearbyQuestions,
     readCachedPosition,
     onPosition: (p) => applyPosition(p, { quiet: true }),
     onDiscoveryCenterChange: (center) => {
@@ -1509,20 +1528,31 @@ async function main() {
     saveName,
   });
 
-  if (bubbleId) {
+  if (questionId) {
+    await initQuestionPage({
+      getQuestionId: () => questionId,
+      getPosition: () => pos,
+      hasPosition: () => !!pos,
+      ensureLocation,
+      saveName,
+    });
+    startLocation();
+  } else if (bubbleId) {
     showThread();
   } else {
     showWelcome();
   }
 
-  startLocation();
+  if (!questionId) {
+    startLocation();
+  }
 
   try {
     const session = await bootstrapSession();
     trackMyName(session.anonymous_name || cachedDisplayName());
     if (myName) syncNameInputs(myName);
   } catch {
-    if (!pos && !bubbleId && hasInterestProfile()) showOnboarding("Session error — refresh the page.");
+    if (!pos && !bubbleId && !questionId && hasInterestProfile()) showOnboarding("Session error — refresh the page.");
   }
 
   window.addEventListener("pagehide", () => {
@@ -1533,7 +1563,7 @@ async function main() {
   });
 
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && getSearchCoords() && !bubbleId) {
+    if (document.visibilityState === "visible" && getSearchCoords() && !bubbleId && !questionId) {
       refreshSidebar({ showLoading: false });
     }
   });

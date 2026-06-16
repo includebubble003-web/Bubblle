@@ -23,6 +23,12 @@ import {
   requestLocationOnce,
 } from "./geo.js";
 import { safeGetItem, safeSetItem } from "./client-state.js";
+import {
+  createQuestionCardElement,
+  filterQuestionsBySearch,
+  questionFingerprint,
+  questionHref,
+} from "./questions.js";
 
 let map = null;
 let userMarker = null;
@@ -473,6 +479,51 @@ function syncFeedSection(container, items, { compact = false, allBubbles = items
   });
 }
 
+function bindQuestionCard(el) {
+  if (!el || el.dataset.bound === "1") return;
+  el.dataset.bound = "1";
+  const go = () => {
+    window.location.href = questionHref(el.dataset.questionId);
+  };
+  el.addEventListener("click", go);
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      go();
+    }
+  });
+}
+
+function syncQuestionSection(container, items) {
+  syncOrderedList(container, items, {
+    fingerprint: questionFingerprint,
+    render: (q) => createQuestionCardElement(q, { escapeHtml }),
+    update: (el, q) => {
+      const titleEl = el.querySelector(".question-card-title");
+      if (titleEl) titleEl.textContent = q.title || "Question";
+      const metaEl = el.querySelector(".question-card-meta");
+      if (metaEl) {
+        const parts = [];
+        const count = Number(q.reply_count) || 0;
+        parts.push(`${count} repl${count === 1 ? "y" : "ies"}`);
+        if (Number.isFinite(q.distance_m)) {
+          const d = q.distance_m;
+          parts.push(d < 1000 ? `${Math.round(d)} m` : `${(d / 1000).toFixed(1)} km`);
+        }
+        metaEl.textContent = parts.join(" · ");
+      }
+    },
+    bind: bindQuestionCard,
+  });
+}
+
+function renderQuestionFeedSection(questions, limit = 8) {
+  const items = questions.slice(0, limit);
+  renderFeedSection("#feed-questions-section", "#feed-questions", items, {
+    isQuestions: true,
+  });
+}
+
 function renderFeedSection(sectionId, containerId, items, options = {}) {
   const section = $(sectionId);
   const container = $(containerId);
@@ -480,7 +531,11 @@ function renderFeedSection(sectionId, containerId, items, options = {}) {
 
   if (items.length) {
     section?.removeAttribute("hidden");
-    syncFeedSection(container, items, options);
+    if (options.isQuestions) {
+      syncQuestionSection(container, items);
+    } else {
+      syncFeedSection(container, items, options);
+    }
   } else {
     section?.setAttribute("hidden", "hidden");
     container.replaceChildren();
@@ -524,8 +579,7 @@ function hideSearchAuxiliarySections() {
   $("#feed-recent-searches-section")?.setAttribute("hidden", "hidden");
   $("#feed-recent-searches-list")?.replaceChildren();
   $("#feed-search-hint")?.setAttribute("hidden", "hidden");
-  $("#feed-search-section")?.setAttribute("hidden", "hidden");
-  $("#feed-search-results")?.replaceChildren();
+  hideSearchResultSections();
   $("#feed-search-empty")?.setAttribute("hidden", "hidden");
 }
 
@@ -622,11 +676,13 @@ function filterBubblesBySearch(bubbles, query) {
 }
 
 function hideStandardFeedSections() {
+  $("#feed-questions-section")?.setAttribute("hidden", "hidden");
   $("#feed-recommended-section")?.setAttribute("hidden", "hidden");
   $("#feed-nearby-section")?.setAttribute("hidden", "hidden");
   $("#feed-trending-section")?.setAttribute("hidden", "hidden");
   $("#feed-recent-section")?.setAttribute("hidden", "hidden");
   $("#feed-discover-section")?.setAttribute("hidden", "hidden");
+  $("#feed-questions")?.replaceChildren();
   $("#feed-recommended")?.replaceChildren();
   $("#feed-nearby")?.replaceChildren();
   $("#feed-trending")?.replaceChildren();
@@ -634,7 +690,7 @@ function hideStandardFeedSections() {
   $("#feed-discover")?.replaceChildren();
 }
 
-function renderStandardFeedSections(bubbles) {
+function renderStandardFeedSections(bubbles, questions) {
   const interests = getUserInterests();
   const recommended = canShowRecommendations()
     ? rankRecommendedBubbles(bubbles, interests, 8)
@@ -678,47 +734,63 @@ function renderStandardFeedSections(bubbles) {
   renderFeedSection("#feed-discover-section", "#feed-discover", discover, {
     allBubbles: bubbles,
   });
+  renderQuestionFeedSection(questions, 8);
 }
 
-function renderSearchFeed(bubbles, query) {
-  const searchSection = $("#feed-search-section");
-  const searchResults = $("#feed-search-results");
+function hideSearchResultSections() {
+  $("#feed-search-section")?.setAttribute("hidden", "hidden");
+  $("#feed-search-results")?.replaceChildren();
+  $("#feed-search-communities-section")?.setAttribute("hidden", "hidden");
+  $("#feed-search-communities")?.replaceChildren();
+  $("#feed-search-questions-section")?.setAttribute("hidden", "hidden");
+  $("#feed-search-questions")?.replaceChildren();
+}
+
+function renderSearchFeed(bubbles, questions, query) {
   const searchEmpty = $("#feed-search-empty");
-  const searchCount = $("#feed-search-count");
-  const results = sortByDistance(filterBubblesBySearch(bubbles, query));
+  const communityResults = sortByDistance(filterBubblesBySearch(bubbles, query));
+  const questionResults = filterQuestionsBySearch(questions, query);
 
   hideStandardFeedSections();
   $("#feed-recent-searches-section")?.setAttribute("hidden", "hidden");
   $("#feed-recent-searches-list")?.replaceChildren();
   $("#feed-search-hint")?.setAttribute("hidden", "hidden");
+  hideSearchResultSections();
   $("#home-empty")?.setAttribute("hidden", "hidden");
   $("#home-feed")?.classList.remove("home-feed--empty");
   document.querySelector(".home-legal-footer")?.toggleAttribute("hidden", feedSearchModeActive);
 
-  if (!results.length) {
-    searchSection?.setAttribute("hidden", "hidden");
-    searchResults?.replaceChildren();
+  const total = communityResults.length + questionResults.length;
+  if (!total) {
     searchEmpty?.removeAttribute("hidden");
-    if (searchCount) searchCount.textContent = "";
     return;
   }
 
   searchEmpty?.setAttribute("hidden", "hidden");
-  searchSection?.removeAttribute("hidden");
-  if (searchCount) {
-    searchCount.textContent = `${results.length} match${results.length === 1 ? "" : "es"}`;
+
+  if (questionResults.length) {
+    $("#feed-search-questions-section")?.removeAttribute("hidden");
+    const countEl = $("#feed-search-questions-count");
+    if (countEl) countEl.textContent = `${questionResults.length}`;
+    syncQuestionSection($("#feed-search-questions"), questionResults);
   }
-  syncFeedSection(searchResults, results, { allBubbles: bubbles });
+
+  if (communityResults.length) {
+    $("#feed-search-communities-section")?.removeAttribute("hidden");
+    const countEl = $("#feed-search-communities-count");
+    if (countEl) countEl.textContent = `${communityResults.length}`;
+    syncFeedSection($("#feed-search-communities"), communityResults, { allBubbles: bubbles });
+  }
 }
 
-function renderSearchModeFeed(bubbles, query) {
+function renderSearchModeFeed(bubbles, questions, query) {
   hideStandardFeedSections();
   $("#home-empty")?.setAttribute("hidden", "hidden");
   $("#home-feed")?.classList.remove("home-feed--empty");
   document.querySelector(".home-legal-footer")?.setAttribute("hidden", "hidden");
 
   if (query.length > 0) {
-    renderSearchFeed(bubbles, query);
+    renderSearchFeed(bubbles, questions, query);
     return;
   }
 
@@ -726,7 +798,7 @@ function renderSearchModeFeed(bubbles, query) {
   renderRecentSearches();
 }
 
-function renderBubbleFeed(bubbles) {
+function renderBubbleFeed(bubbles, questions = hooks.getNearbyQuestions?.() || []) {
   const hasPos = !!hooks.hasPosition?.();
   const emptyEl = $("#home-empty");
   const feedEl = $("#home-feed");
@@ -748,17 +820,17 @@ function renderBubbleFeed(bubbles) {
   }
 
   if (inSearchMode) {
-    renderSearchModeFeed(bubbles, query);
+    renderSearchModeFeed(bubbles, questions, query);
   } else if (isFiltering) {
     hideSearchAuxiliarySections();
     document.querySelector(".home-legal-footer")?.removeAttribute("hidden");
-    renderSearchFeed(bubbles, query);
+    renderSearchFeed(bubbles, questions, query);
   } else {
     hideSearchAuxiliarySections();
     document.querySelector(".home-legal-footer")?.removeAttribute("hidden");
-    renderStandardFeedSections(bubbles);
+    renderStandardFeedSections(bubbles, questions);
 
-    const showEmpty = bubbles.length === 0;
+    const showEmpty = bubbles.length === 0 && questions.length === 0;
     if (emptyEl) emptyEl.hidden = !showEmpty;
     feedEl?.classList.toggle("home-feed--empty", showEmpty);
 
@@ -788,6 +860,7 @@ function setFeedLoading(loading) {
   feedLoading = loading;
   $("#feed-loading")?.toggleAttribute("hidden", !loading);
   if (loading && !feedLoadedOnce) {
+    $("#feed-questions-section")?.setAttribute("hidden", "hidden");
     $("#feed-recommended-section")?.setAttribute("hidden", "hidden");
     $("#feed-nearby-section")?.setAttribute("hidden", "hidden");
     $("#feed-trending-section")?.setAttribute("hidden", "hidden");
@@ -868,25 +941,41 @@ function openSheet(id) {
 
 function closeAllSheets() {
   $("#create-sheet")?.setAttribute("hidden", "hidden");
+  $("#ask-question-sheet")?.setAttribute("hidden", "hidden");
   $("#sheet-backdrop")?.setAttribute("hidden", "hidden");
   document.body.classList.remove("sheet-open");
   clearSimilarResults();
 }
 
-function clearSimilarResults() {
-  if (similarSearchTimer) {
-    clearTimeout(similarSearchTimer);
-    similarSearchTimer = null;
-  }
-  if (similarFetchAbort) {
-    similarFetchAbort.abort();
-    similarFetchAbort = null;
-  }
-  const section = $("#create-similar-section");
-  const list = $("#create-similar-list");
-  section?.setAttribute("hidden", "hidden");
-  if (list) list.replaceChildren();
-  updateCreateSubmitLabel(false);
+function populateQuestionCommunitySelect() {
+  const select = $("#ask-question-community");
+  if (!select) return;
+  const bubbles = hooks.getNearbyBubbles?.() || [];
+  const current = select.value;
+  select.replaceChildren(
+    Object.assign(document.createElement("option"), {
+      value: "",
+      textContent: "No community — ask everyone nearby",
+    }),
+    ...bubbles.map((b) =>
+      Object.assign(document.createElement("option"), {
+        value: b.id,
+        textContent: b.title || "Community",
+      }),
+    ),
+  );
+  if (current) select.value = current;
+}
+
+function openAskQuestionSheet() {
+  populateQuestionCommunitySelect();
+  const title = $("#ask-question-title");
+  const desc = $("#ask-question-desc");
+  if (title) title.value = "";
+  if (desc) desc.value = "";
+  $("#ask-question-error")?.setAttribute("hidden", "hidden");
+  openSheet("#ask-question-sheet");
+  setTimeout(() => title?.focus(), 200);
 }
 
 function updateCreateSubmitLabel(hasSimilar) {
@@ -1007,6 +1096,22 @@ function openCreateSheet() {
   openSheet("#create-sheet");
 }
 
+function clearSimilarResults() {
+  if (similarSearchTimer) {
+    clearTimeout(similarSearchTimer);
+    similarSearchTimer = null;
+  }
+  if (similarFetchAbort) {
+    similarFetchAbort.abort();
+    similarFetchAbort = null;
+  }
+  const section = $("#create-similar-section");
+  const list = $("#create-similar-list");
+  section?.setAttribute("hidden", "hidden");
+  if (list) list.replaceChildren();
+  updateCreateSubmitLabel(false);
+}
+
 function setupMapUi() {
   $("#btn-enable-location")?.addEventListener("click", async () => {
     const btn = $("#btn-enable-location");
@@ -1037,6 +1142,69 @@ function setupMapUi() {
       return;
     }
     openCreateSheet();
+  });
+
+  $("#btn-create-community")?.addEventListener("click", () => {
+    if (!hooks.hasPosition?.()) {
+      showOnboarding("Enable location to create a community where you are.");
+      return;
+    }
+    openCreateSheet();
+  });
+
+  $("#btn-ask-question")?.addEventListener("click", () => {
+    if (!hooks.hasPosition?.()) {
+      showOnboarding("Enable location to ask a question nearby.");
+      return;
+    }
+    openAskQuestionSheet();
+  });
+
+  $("#ask-question-close")?.addEventListener("click", closeAllSheets);
+
+  $("#ask-question-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const title = $("#ask-question-title")?.value.trim();
+    if (!title) return;
+    const errEl = $("#ask-question-error");
+    const btn = $("#ask-question-submit");
+    if (btn) btn.disabled = true;
+    try {
+      if (!hooks.hasPosition?.()) await hooks.ensureLocation?.();
+      await hooks.saveName?.();
+      const body = {
+        title,
+        description: $("#ask-question-desc")?.value.trim() || "",
+        latitude: hooks.getPosition().lat,
+        longitude: hooks.getPosition().lng,
+      };
+      const communityId = $("#ask-question-community")?.value;
+      if (communityId) body.bubble_id = communityId;
+      const res = await fetch("/api/questions/", {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        if (errEl) {
+          errEl.hidden = false;
+          errEl.textContent = "Could not post question. Try again.";
+        }
+        return;
+      }
+      const q = await res.json();
+      closeAllSheets();
+      window.location.href = questionHref(q.id);
+    } catch {
+      if (errEl) {
+        errEl.hidden = false;
+        errEl.textContent = "Location or network error.";
+      }
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   });
 
   $("#home-empty-create")?.addEventListener("click", () => {
@@ -1071,7 +1239,12 @@ function setupMapUi() {
 
   $("#feed-search-empty-create")?.addEventListener("click", () => {
     exitSearchMode({ clearQuery: false });
-    $("#fab-create")?.click();
+    openCreateSheet();
+  });
+
+  $("#feed-search-empty-ask")?.addEventListener("click", () => {
+    exitSearchMode({ clearQuery: false });
+    openAskQuestionSheet();
   });
 
   $("#create-bubble-title")?.addEventListener("input", (e) => {
@@ -1184,7 +1357,8 @@ function finishInterestOnboarding(saved = false) {
   if (saved) {
     saveUserInterests([...selectedInterestIds]);
     const bubbles = hooks.getNearbyBubbles?.() || [];
-    if (bubbles.length) renderBubbleFeed(bubbles);
+    const questions = hooks.getNearbyQuestions?.() || [];
+    if (bubbles.length || questions.length) renderBubbleFeed(bubbles, questions);
   }
   hooks.onInterestsComplete?.();
   if (!hooks.hasPosition?.()) tryAutoStart();
@@ -1227,7 +1401,7 @@ export function onMapPositionUpdate(pos) {
   setMapUserPosition(pos);
 }
 
-export function onMapBubblesUpdated(bubbles) {
+export function onMapBubblesUpdated(bubbles, questions = hooks.getNearbyQuestions?.() || []) {
   syncMapMarkers(bubbles);
-  renderBubbleFeed(bubbles);
+  renderBubbleFeed(bubbles, questions);
 }

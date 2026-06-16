@@ -10,7 +10,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from .membership import membership_count
-from .models import Bubble, Message
+from .models import Bubble, Message, Question, Reply
 
 
 def haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -130,3 +130,55 @@ def serialize_bubble_summary(bubble: Bubble, viewer_lat: float, viewer_lng: floa
         "active_users": users,
         "online_count": users,  # legacy alias for older clients
     }
+
+
+def serialize_question_summary(
+    question: Question,
+    viewer_lat: float,
+    viewer_lng: float,
+    *,
+    reply_count: int | None = None,
+) -> dict:
+    dist = haversine_distance_m(viewer_lat, viewer_lng, question.latitude, question.longitude)
+    count = reply_count if reply_count is not None else question.replies.count()
+    bubble = question.bubble
+    return {
+        "id": str(question.id),
+        "title": question.title,
+        "description": question.description or "",
+        "anonymous_name": question.anonymous_name,
+        "latitude": question.latitude,
+        "longitude": question.longitude,
+        "distance_m": round(dist, 1),
+        "reply_count": count,
+        "created_at": question.created_at.isoformat(),
+        "last_activity_at": question.last_activity_at.isoformat(),
+        "bubble_id": str(bubble.id) if bubble else None,
+        "bubble_title": bubble.title if bubble else None,
+    }
+
+
+def rank_question_summaries(summaries: list[dict]) -> list[dict]:
+    """Local-first: distance, then recent activity, then reply count."""
+
+    def activity_ts(item: dict) -> float:
+        raw = item.get("last_activity_at") or item.get("created_at") or ""
+        try:
+            from datetime import datetime
+
+            return datetime.fromisoformat(str(raw).replace("Z", "+00:00")).timestamp()
+        except (TypeError, ValueError):
+            return 0.0
+
+    return sorted(
+        summaries,
+        key=lambda item: (
+            item.get("distance_m", 0),
+            -activity_ts(item),
+            -(item.get("reply_count") or 0),
+        ),
+    )
+
+
+def question_search_radius_m() -> int:
+    return int(getattr(settings, "BUBBLLE_DEFAULT_RADIUS_M", 5000))

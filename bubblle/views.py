@@ -9,7 +9,9 @@ class ChatShellView(TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         bid = self.kwargs.get("bubble_id")
+        qid = self.kwargs.get("question_id")
         ctx["bubble_id"] = str(bid) if bid else ""
+        ctx["question_id"] = str(qid) if qid else ""
         return ctx
 
 
