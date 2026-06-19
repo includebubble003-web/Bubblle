@@ -29,7 +29,33 @@ export function fmtQuestionActivity(iso) {
 
 export function fmtReplyCount(n) {
   const count = Number(n) || 0;
-  return `${count} repl${count === 1 ? "y" : "ies"}`;
+  return `${count} answer${count === 1 ? "" : "s"}`;
+}
+
+export function fmtTimeAgo(iso) {
+  if (!iso) return "";
+  const then = new Date(iso);
+  if (Number.isNaN(then.getTime())) return "";
+  const secs = Math.floor((Date.now() - then.getTime()) / 1000);
+  if (secs < 60) return "just now";
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  return then.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+export function authorInitials(name) {
+  const parts = String(name || "?")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
 export function normalizeSearchText(text) {
@@ -61,18 +87,22 @@ export function questionCardMeta(question) {
 }
 
 export function questionCardHtml(q, { escapeHtml }) {
-  const initial = (q.title || "?").trim().charAt(0).toUpperCase() || "?";
   const meta = questionCardMeta(q);
   const community = q.bubble_title
     ? `<span class="question-card-community">${escapeHtml(q.bubble_title)}</span>`
     : "";
+  const replies = Number(q.reply_count) || 0;
+  const metaTail = meta.split(" · ").slice(1).join(" · ");
 
   return `<article class="question-card" data-question-id="${escapeHtml(q.id)}" tabindex="0" role="link">
-    <div class="question-card-icon" aria-hidden="true">?</div>
+    <div class="question-card-accent" aria-hidden="true"></div>
     <div class="question-card-body">
       <h3 class="question-card-title">${escapeHtml(q.title || "Question")}</h3>
       ${community}
-      <p class="question-card-meta">${escapeHtml(meta)}</p>
+      <div class="question-card-foot">
+        <span class="question-card-stat question-card-stat--answers">${replies} answer${replies === 1 ? "" : "s"}</span>
+        ${metaTail ? `<span class="question-card-stat">${escapeHtml(metaTail)}</span>` : ""}
+      </div>
     </div>
     <span class="question-card-chevron" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>

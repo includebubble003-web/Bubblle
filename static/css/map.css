@@ -1512,55 +1512,57 @@ body.sheet-open {
   border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
-/* Question cards */
+/* Question cards (feed) */
 .question-card {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px;
-  border-radius: 16px;
+  padding: 16px;
+  border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(22, 24, 32, 0.72);
+  background: rgba(22, 24, 32, 0.82);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
   -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+}
+
+.question-card-accent {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, #00c9a7, #5865f2);
+  border-radius: 18px 0 0 18px;
 }
 
 .question-card:active {
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.question-card-icon {
-  width: 40px;
-  height: 40px;
-  flex-shrink: 0;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 201, 167, 0.14);
-  color: #5eead4;
-  font-weight: 700;
-  font-size: 1.125rem;
+  transform: scale(0.99);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .question-card-body {
   flex: 1;
   min-width: 0;
+  padding-left: 4px;
 }
 
 .question-card-title {
-  margin: 0 0 4px;
-  font-size: 0.9375rem;
-  font-weight: 600;
+  margin: 0 0 8px;
+  font-size: 1rem;
+  font-weight: 700;
   line-height: 1.35;
+  letter-spacing: -0.02em;
   color: #f0f2f7;
 }
 
 .question-card-community {
   display: inline-block;
-  margin-bottom: 4px;
-  padding: 2px 8px;
+  margin-bottom: 8px;
+  padding: 3px 9px;
   border-radius: 999px;
   font-size: 0.6875rem;
   font-weight: 600;
@@ -1568,10 +1570,22 @@ body.sheet-open {
   background: rgba(88, 101, 242, 0.14);
 }
 
-.question-card-meta {
-  margin: 0;
+.question-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.question-card-stat {
   font-size: 0.75rem;
+  font-weight: 500;
   color: #8b92a8;
+}
+
+.question-card-stat--answers {
+  font-weight: 700;
+  color: #5eead4;
 }
 
 .question-card-chevron {

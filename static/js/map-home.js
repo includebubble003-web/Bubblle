@@ -26,6 +26,7 @@ import { safeGetItem, safeSetItem } from "./client-state.js";
 import {
   createQuestionCardElement,
   filterQuestionsBySearch,
+  questionCardMeta,
   questionFingerprint,
   questionHref,
 } from "./questions.js";
@@ -501,17 +502,14 @@ function syncQuestionSection(container, items) {
     update: (el, q) => {
       const titleEl = el.querySelector(".question-card-title");
       if (titleEl) titleEl.textContent = q.title || "Question";
-      const metaEl = el.querySelector(".question-card-meta");
-      if (metaEl) {
-        const parts = [];
+      const answersEl = el.querySelector(".question-card-stat--answers");
+      if (answersEl) {
         const count = Number(q.reply_count) || 0;
-        parts.push(`${count} repl${count === 1 ? "y" : "ies"}`);
-        if (Number.isFinite(q.distance_m)) {
-          const d = q.distance_m;
-          parts.push(d < 1000 ? `${Math.round(d)} m` : `${(d / 1000).toFixed(1)} km`);
-        }
-        metaEl.textContent = parts.join(" · ");
+        answersEl.textContent = `${count} answer${count === 1 ? "" : "s"}`;
       }
+      const footStats = el.querySelectorAll(".question-card-foot .question-card-stat:not(.question-card-stat--answers)");
+      const metaTail = questionCardMeta(q).split(" · ").slice(1).join(" · ");
+      if (footStats[0]) footStats[0].textContent = metaTail;
     },
     bind: bindQuestionCard,
   });
