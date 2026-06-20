@@ -557,6 +557,140 @@ function renderFeedSection(sectionId, containerId, items, options = {}) {
 let feedSearchQuery = "";
 let feedSearchModeActive = false;
 
+const FEED_TABS = ["for-you", "questions", "communities"];
+const FEED_TAB_SWIPE_THRESHOLD = 52;
+const FEED_TAB_SWIPE_MAX_VERTICAL = 48;
+
+let activeFeedTab = "for-you";
+const feedTabScrollPositions = { "for-you": 0, questions: 0, communities: 0 };
+let feedTabSwipeStart = null;
+
+function setFeedTabsVisible(visible) {
+  $("#feed-tabs-wrap")?.toggleAttribute("hidden", !visible);
+  $("#feed-tab-panels")?.toggleAttribute("hidden", !visible);
+}
+
+function applyFeedTabPanel(tab) {
+  if (!FEED_TABS.includes(tab)) return;
+  activeFeedTab = tab;
+
+  document.querySelectorAll(".feed-tab").forEach((btn) => {
+    const on = btn.dataset.feedTab === tab;
+    btn.classList.toggle("is-active", on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+  });
+
+  document.querySelectorAll(".feed-tab-panel").forEach((panel) => {
+    const on = panel.dataset.feedTabPanel === tab;
+    panel.classList.toggle("is-active", on);
+    panel.toggleAttribute("hidden", !on);
+  });
+}
+
+function setFeedTab(tab, { restoreScroll = false, saveCurrent = true } = {}) {
+  if (!FEED_TABS.includes(tab)) return;
+
+  const scrollEl = $("#home-feed-scroll");
+  if (saveCurrent && scrollEl && tab !== activeFeedTab) {
+    feedTabScrollPositions[activeFeedTab] = scrollEl.scrollTop;
+  }
+
+  applyFeedTabPanel(tab);
+
+  if (restoreScroll && scrollEl) {
+    requestAnimationFrame(() => {
+      scrollEl.scrollTop = feedTabScrollPositions[tab] ?? 0;
+    });
+  }
+}
+
+function updateFeedTabCounts(questions, bubbles) {
+  const qCount = questions.length;
+  const cCount = bubbles.length;
+  const qEl = $("#feed-tab-count-questions");
+  const cEl = $("#feed-tab-count-communities");
+  if (qEl) {
+    qEl.textContent = qCount > 0 ? ` (${qCount})` : "";
+    qEl.hidden = qCount === 0;
+  }
+  if (cEl) {
+    cEl.textContent = cCount > 0 ? ` (${cCount})` : "";
+    cEl.hidden = cCount === 0;
+  }
+}
+
+function sectionIsVisible(sectionId) {
+  const el = $(sectionId);
+  return el && !el.hasAttribute("hidden");
+}
+
+function updateFeedTabEmptyStates() {
+  const forYouHas =
+    sectionIsVisible("#feed-recommended-section") || sectionIsVisible("#feed-discover-section");
+  $("#feed-tab-empty-for-you")?.toggleAttribute("hidden", forYouHas);
+
+  const questionsHas = sectionIsVisible("#feed-questions-section");
+  $("#feed-tab-empty-questions")?.toggleAttribute("hidden", questionsHas);
+
+  const communitiesHas =
+    sectionIsVisible("#feed-nearby-section") ||
+    sectionIsVisible("#feed-trending-section") ||
+    sectionIsVisible("#feed-recent-section");
+  $("#feed-tab-empty-communities")?.toggleAttribute("hidden", communitiesHas);
+}
+
+function feedTabsInteractive() {
+  return !feedSearchModeActive && !feedSearchQuery.trim() && feedLoadedOnce;
+}
+
+function setupFeedTabGestures() {
+  const area = $("#home-feed-scroll");
+  if (!area || area.dataset.feedSwipeBound === "1") return;
+  area.dataset.feedSwipeBound = "1";
+
+  area.addEventListener(
+    "touchstart",
+    (e) => {
+      if (!feedTabsInteractive()) return;
+      const t = e.changedTouches[0];
+      feedTabSwipeStart = { x: t.clientX, y: t.clientY };
+    },
+    { passive: true },
+  );
+
+  area.addEventListener(
+    "touchend",
+    (e) => {
+      if (!feedTabSwipeStart || !feedTabsInteractive()) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - feedTabSwipeStart.x;
+      const dy = t.clientY - feedTabSwipeStart.y;
+      feedTabSwipeStart = null;
+      if (Math.abs(dy) > FEED_TAB_SWIPE_MAX_VERTICAL && Math.abs(dy) > Math.abs(dx)) return;
+      if (Math.abs(dx) < FEED_TAB_SWIPE_THRESHOLD) return;
+      const idx = FEED_TABS.indexOf(activeFeedTab);
+      if (dx < 0 && idx < FEED_TABS.length - 1) {
+        setFeedTab(FEED_TABS[idx + 1], { restoreScroll: true });
+      } else if (dx > 0 && idx > 0) {
+        setFeedTab(FEED_TABS[idx - 1], { restoreScroll: true });
+      }
+    },
+    { passive: true },
+  );
+}
+
+function setupFeedTabs() {
+  document.querySelectorAll(".feed-tab").forEach((btn) => {
+    if (btn.dataset.bound === "1") return;
+    btn.dataset.bound = "1";
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.feedTab;
+      if (tab && tab !== activeFeedTab) setFeedTab(tab, { restoreScroll: true });
+    });
+  });
+  setupFeedTabGestures();
+}
+
 const RECENT_SEARCHES_KEY = "bbl_recent_searches";
 const MAX_RECENT_SEARCHES = 8;
 const MOBILE_SEARCH_MQ = "(max-width: 900px)";
@@ -632,6 +766,7 @@ function setSearchModeUi(active) {
   $("#home-split")?.classList.toggle("home-split--search-mode", active);
   $("#map-screen")?.classList.toggle("home-screen--search-mode", active);
   $("#feed-search-cancel")?.toggleAttribute("hidden", !active);
+  if (active) setFeedTabsVisible(false);
 }
 
 function enterSearchMode() {
@@ -749,6 +884,8 @@ function renderStandardFeedSections(bubbles, questions) {
     allBubbles: bubbles,
   });
   renderQuestionFeedSection(questions, 8);
+  updateFeedTabCounts(questions, bubbles);
+  updateFeedTabEmptyStates();
 }
 
 function hideSearchResultSections() {
@@ -829,13 +966,16 @@ function renderBubbleFeed(bubbles, questions = hooks.getNearbyQuestions?.() || [
   if (!hasPos) {
     hideStandardFeedSections();
     hideSearchAuxiliarySections();
+    setFeedTabsVisible(false);
     emptyEl?.setAttribute("hidden", "hidden");
     return;
   }
 
   if (inSearchMode) {
+    setFeedTabsVisible(false);
     renderSearchModeFeed(bubbles, questions, query);
   } else if (isFiltering) {
+    setFeedTabsVisible(false);
     hideSearchAuxiliarySections();
     document.querySelector(".home-legal-footer")?.removeAttribute("hidden");
     renderSearchFeed(bubbles, questions, query);
@@ -843,6 +983,8 @@ function renderBubbleFeed(bubbles, questions = hooks.getNearbyQuestions?.() || [
     hideSearchAuxiliarySections();
     document.querySelector(".home-legal-footer")?.removeAttribute("hidden");
     renderStandardFeedSections(bubbles, questions);
+    setFeedTabsVisible(true);
+    applyFeedTabPanel(activeFeedTab);
 
     const showEmpty = bubbles.length === 0 && questions.length === 0;
     if (emptyEl) emptyEl.hidden = !showEmpty;
@@ -871,6 +1013,7 @@ function setFeedLoading(loading) {
   feedLoading = loading;
   $("#feed-loading")?.toggleAttribute("hidden", !loading);
   if (loading && !feedLoadedOnce) {
+    setFeedTabsVisible(false);
     $("#feed-questions-section")?.setAttribute("hidden", "hidden");
     $("#feed-recommended-section")?.setAttribute("hidden", "hidden");
     $("#feed-nearby-section")?.setAttribute("hidden", "hidden");
@@ -1220,6 +1363,8 @@ function setupMapUi() {
   $("#feed-search")?.addEventListener("focus", () => {
     if (isMobileSearchLayout()) enterSearchMode();
   });
+
+  setupFeedTabs();
 
   $("#feed-search")?.addEventListener("input", (e) => {
     feedSearchQuery = e.target.value || "";
