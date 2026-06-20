@@ -328,36 +328,19 @@
           </div>
 
           <header class="question-hero" id="question-hero" hidden>
-            <div class="question-hero-stats" id="question-hero-stats">
-              <span class="question-stat question-stat--replies" id="question-stat-replies">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>
-                <span id="question-stat-replies-text">0 answers</span>
-              </span>
-              <span class="question-stat question-stat--activity" id="question-stat-activity" hidden>
-                <span class="question-stat-live" aria-hidden="true"></span>
-                <span id="question-stat-activity-text"></span>
-              </span>
-              <span class="question-stat question-stat--distance" id="question-stat-distance" hidden>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s7-4.35 7-11a7 7 0 1 0-14 0c0 6.65 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
-                <span id="question-stat-distance-text"></span>
-              </span>
-            </div>
             <h1 class="question-hero-title" id="question-page-title"></h1>
             <p class="question-hero-description" id="question-page-description" hidden></p>
-            <div class="question-hero-author-row">
-              <span class="question-hero-avatar" id="question-hero-avatar" aria-hidden="true">?</span>
-              <div class="question-hero-author-meta">
-                <span class="question-hero-author-name" id="question-page-author"></span>
-                <span class="question-hero-author-time" id="question-page-time"></span>
-              </div>
-            </div>
+            <p class="question-hero-byline" id="question-page-byline">
+              Asked by <span class="question-hero-author" id="question-page-author"></span>
+            </p>
+            <p class="question-hero-meta" id="question-page-meta"></p>
             <p class="question-hero-community" id="question-page-community" hidden></p>
           </header>
 
           <section class="question-answers" id="question-answers-section" hidden>
             <div class="question-answers-head">
               <h2 class="question-answers-label">Answers</h2>
-              <span class="question-answers-count" id="question-answers-count"></span>
+              <span class="question-answers-metrics" id="question-answers-metrics"></span>
             </div>
             <div class="question-answers-list" id="question-replies" role="list"></div>
             <div class="question-empty" id="question-replies-empty" hidden>

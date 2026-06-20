@@ -4,9 +4,11 @@
 import {
   authorInitials,
   fmtQuestionActivity,
-  fmtQuestionDistance,
+  fmtQuestionDistanceAway,
   fmtReplyCount,
+  fmtReplyCountReplies,
   fmtTimeAgo,
+  fmtTimeAgoLong,
   questionHref,
 } from "./questions.js";
 
@@ -47,17 +49,26 @@ function setLoading(loading) {
   }
 }
 
+function buildQuestionMetaLine(q) {
+  const parts = [];
+  const dist = fmtQuestionDistanceAway(q.distance_m);
+  if (dist) parts.push(dist);
+  parts.push(fmtReplyCountReplies(q.reply_count));
+  const posted = fmtTimeAgoLong(q.created_at);
+  if (posted) parts.push(posted);
+  return parts.join(" • ");
+}
+
 function replyHtml(reply) {
   const initials = authorInitials(reply.anonymous_name);
   return `<article class="answer-card" data-reply-id="${escapeHtml(reply.id)}" role="listitem">
     <div class="answer-card-avatar" aria-hidden="true">${escapeHtml(initials)}</div>
     <div class="answer-card-body">
-      <div class="answer-card-meta">
+      <header class="answer-card-header">
         <span class="answer-card-author">${escapeHtml(reply.anonymous_name)}</span>
-        <span class="answer-card-dot" aria-hidden="true">·</span>
         <time class="answer-card-time" datetime="${escapeHtml(reply.created_at)}">${escapeHtml(fmtTimeAgo(reply.created_at))}</time>
-      </div>
-      <p class="answer-card-text">${escapeHtml(reply.message)}</p>
+      </header>
+      <div class="answer-card-text">${escapeHtml(reply.message)}</div>
     </div>
   </article>`;
 }
@@ -78,50 +89,23 @@ function renderQuestionHeader(q) {
     }
   }
 
-  const avatarEl = $("#question-hero-avatar");
-  if (avatarEl) avatarEl.textContent = authorInitials(q.anonymous_name);
-
   const authorEl = $("#question-page-author");
   if (authorEl) authorEl.textContent = q.anonymous_name || "Anonymous";
 
-  const timeEl = $("#question-page-time");
-  if (timeEl) timeEl.textContent = `Asked ${fmtTimeAgo(q.created_at)}`;
+  const metaEl = $("#question-page-meta");
+  if (metaEl) metaEl.textContent = buildQuestionMetaLine(q);
 
-  const repliesText = $("#question-stat-replies-text");
-  if (repliesText) repliesText.textContent = fmtReplyCount(q.reply_count);
-
-  const answersCount = $("#question-answers-count");
-  if (answersCount) answersCount.textContent = fmtReplyCount(q.reply_count);
-
-  const activityStat = $("#question-stat-activity");
-  const activityText = $("#question-stat-activity-text");
-  const activity = fmtQuestionActivity(q.last_activity_at);
-  if (activityStat && activityText) {
-    if (activity) {
-      activityText.textContent = activity;
-      activityStat.hidden = false;
-      activityStat.classList.toggle("question-stat--live", activity === "Active now" || activity.includes("min ago"));
-    } else {
-      activityStat.hidden = true;
-    }
-  }
-
-  const distStat = $("#question-stat-distance");
-  const distText = $("#question-stat-distance-text");
-  const dist = fmtQuestionDistance(q.distance_m);
-  if (distStat && distText) {
-    if (dist) {
-      distText.textContent = dist + " away";
-      distStat.hidden = false;
-    } else {
-      distStat.hidden = true;
-    }
+  const metricsEl = $("#question-answers-metrics");
+  if (metricsEl) {
+    const replies = fmtReplyCount(q.reply_count);
+    const activity = fmtQuestionActivity(q.last_activity_at);
+    metricsEl.textContent = activity ? `${replies} · ${activity}` : replies;
   }
 
   const communityEl = $("#question-page-community");
   if (communityEl) {
     if (q.bubble_id && q.bubble_title) {
-      communityEl.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg> In <a href="/bubble/${escapeHtml(q.bubble_id)}/">${escapeHtml(q.bubble_title)}</a>`;
+      communityEl.innerHTML = `In <a href="/bubble/${escapeHtml(q.bubble_id)}/">${escapeHtml(q.bubble_title)}</a>`;
       communityEl.hidden = false;
     } else {
       communityEl.hidden = true;
