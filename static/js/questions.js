@@ -100,7 +100,7 @@ export function questionCardHtml(q, { escapeHtml }) {
       <h3 class="question-card-title">${escapeHtml(q.title || "Question")}</h3>
       ${community}
       <div class="question-card-foot">
-        <span class="question-card-stat question-card-stat--answers">${replies} answer${replies === 1 ? "" : "s"}</span>
+        <span class="question-card-stat question-card-stat--answers">${replies} repl${replies === 1 ? "y" : "ies"}</span>
         ${metaTail ? `<span class="question-card-stat">${escapeHtml(metaTail)}</span>` : ""}
       </div>
     </div>

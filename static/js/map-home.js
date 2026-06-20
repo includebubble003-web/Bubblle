@@ -67,6 +67,34 @@ function fmtDistance(m) {
   return `${(n / 1000).toFixed(1)} km`;
 }
 
+function fmtDistanceAway(m) {
+  const d = fmtDistance(m);
+  return d === "—" ? d : `${d} away`;
+}
+
+function fmtActiveLabel(count) {
+  const n = Number(count) || 0;
+  if (n <= 0) return "No one active";
+  return `${n} active now`;
+}
+
+function bubbleCardDetailsHtml(b) {
+  const count = activeUsers(b);
+  const live = count > 0;
+  const activeText = fmtActiveLabel(count);
+  const distText = fmtDistanceAway(b.distance_m);
+  return `<div class="bubble-card-details">
+    <span class="bubble-card-detail bubble-card-detail--active">
+      <span class="bubble-card-detail-icon" aria-hidden="true">${live ? "🟢" : "⚪"}</span>
+      ${escapeHtml(activeText)}
+    </span>
+    <span class="bubble-card-detail bubble-card-detail--distance">
+      <span class="bubble-card-detail-icon" aria-hidden="true">📍</span>
+      ${escapeHtml(distText)}
+    </span>
+  </div>`;
+}
+
 function bubbleInitial(title) {
   const t = String(title || "?").trim();
   return t ? t.charAt(0).toUpperCase() : "?";
@@ -344,17 +372,11 @@ function bubbleCardHtml(b, { compact = false, recommended = false } = {}) {
     ? `<a href="${bubbleHref(b.id)}" class="bubble-card-join bubble-card-join--sm">Join</a>`
     : `<a href="${bubbleHref(b.id)}" class="bubble-card-join">Join</a>`;
 
-  return `<article class="${cls}" data-bubble-id="${escapeHtml(b.id)}" tabindex="0" role="button" aria-label="${escapeHtml(b.title || "Bubble")}">
-    <span class="bubble-card-avatar" aria-hidden="true">${escapeHtml(bubbleInitial(b.title))}</span>
-    <span class="bubble-card-body">
-      <span class="bubble-card-title">${escapeHtml(b.title || "Bubble")}</span>
-      <span class="bubble-card-meta">
-        <span class="bubble-card-stat bubble-card-stat--users">${count} active</span>
-        <span class="bubble-card-stat">${fmtDistance(b.distance_m)}</span>
-        <span class="bubble-card-stat bubble-card-stat--activity">${escapeHtml(fmtLastActivity(b))}</span>
-      </span>
-    </span>
-    ${live ? '<span class="bubble-card-live-dot" aria-hidden="true"></span>' : ""}
+  return `<article class="${cls}" data-bubble-id="${escapeHtml(b.id)}" tabindex="0" role="button" aria-label="${escapeHtml(b.title || "Community")}">
+    <div class="bubble-card-body">
+      <h3 class="bubble-card-title">${escapeHtml(b.title || "Community")}</h3>
+      ${bubbleCardDetailsHtml(b)}
+    </div>
     ${recommended ? '<span class="bubble-card-badge bubble-card-badge--for-you">For you</span>' : ""}
     ${!recommended && trending ? '<span class="bubble-card-badge">Hot</span>' : ""}
     ${joinBtn}
@@ -427,21 +449,13 @@ function applyBubbleCardState(el, b, { compact = false, recommended = false } = 
     .join(" ");
 
   const titleEl = el.querySelector(".bubble-card-title");
-  if (titleEl) titleEl.textContent = b.title || "Bubble";
+  if (titleEl) titleEl.textContent = b.title || "Community";
 
-  const stats = el.querySelectorAll(".bubble-card-stat");
-  if (stats[0]) stats[0].textContent = `${count} active`;
-  if (stats[1]) stats[1].textContent = fmtDistance(b.distance_m);
-  if (stats[2]) stats[2].textContent = fmtLastActivity(b);
-
-  let liveDot = el.querySelector(".bubble-card-live-dot");
-  if (live && !liveDot) {
-    liveDot = document.createElement("span");
-    liveDot.className = "bubble-card-live-dot";
-    liveDot.setAttribute("aria-hidden", "true");
-    el.appendChild(liveDot);
-  } else if (!live && liveDot) {
-    liveDot.remove();
+  const detailsEl = el.querySelector(".bubble-card-details");
+  if (detailsEl) {
+    const wrap = document.createElement("div");
+    wrap.innerHTML = bubbleCardDetailsHtml(b);
+    detailsEl.replaceWith(wrap.firstElementChild);
   }
 
   let badge = el.querySelector(".bubble-card-badge:not(.bubble-card-badge--for-you)");
@@ -505,7 +519,7 @@ function syncQuestionSection(container, items) {
       const answersEl = el.querySelector(".question-card-stat--answers");
       if (answersEl) {
         const count = Number(q.reply_count) || 0;
-        answersEl.textContent = `${count} answer${count === 1 ? "" : "s"}`;
+        answersEl.textContent = `${count} repl${count === 1 ? "y" : "ies"}`;
       }
       const footStats = el.querySelectorAll(".question-card-foot .question-card-stat:not(.question-card-stat--answers)");
       const metaTail = questionCardMeta(q).split(" · ").slice(1).join(" · ");
@@ -618,9 +632,6 @@ function setSearchModeUi(active) {
   $("#home-split")?.classList.toggle("home-split--search-mode", active);
   $("#map-screen")?.classList.toggle("home-screen--search-mode", active);
   $("#feed-search-cancel")?.toggleAttribute("hidden", !active);
-  const fab = $("#fab-create");
-  if (active) fab?.setAttribute("hidden", "hidden");
-  else fab?.removeAttribute("hidden");
 }
 
 function enterSearchMode() {
@@ -710,9 +721,14 @@ function renderStandardFeedSections(bubbles, questions) {
 
   const countEl = $("#feed-nearby-count");
   if (countEl) {
-    countEl.textContent = nearbyCommunities.length
-      ? `${bubbles.length} in this area`
-      : "";
+    const totalActive = bubbles.reduce((s, b) => s + activeUsers(b), 0);
+    if (totalActive > 0) {
+      countEl.textContent = `${totalActive} active people nearby`;
+    } else if (nearbyCommunities.length) {
+      countEl.textContent = `${nearbyCommunities.length} communit${nearbyCommunities.length === 1 ? "y" : "ies"} nearby`;
+    } else {
+      countEl.textContent = "";
+    }
   }
 
   renderFeedSection("#feed-recommended-section", "#feed-recommended", recommended, {
@@ -831,9 +847,6 @@ function renderBubbleFeed(bubbles, questions = hooks.getNearbyQuestions?.() || [
     const showEmpty = bubbles.length === 0 && questions.length === 0;
     if (emptyEl) emptyEl.hidden = !showEmpty;
     feedEl?.classList.toggle("home-feed--empty", showEmpty);
-
-    const fab = $("#fab-create");
-    fab?.classList.toggle("home-fab--highlight", showEmpty && hasPos);
   }
 
   if (selectedBubbleId) {
@@ -878,15 +891,14 @@ function updateLiveBadge(bubbles) {
   const textEl = el.querySelector(".live-nearby-text");
   if (!textEl) return;
   const total = bubbles.reduce((s, b) => s + activeUsers(b), 0);
-  const chatting = bubbles.filter((b) => activeUsers(b) > 0).length;
-  if (chatting > 0) {
-    textEl.textContent = `${total} chatting nearby`;
+  if (total > 0) {
+    textEl.textContent = `${total} ${total === 1 ? "local" : "locals"} active now`;
     el.dataset.state = "live";
   } else if (bubbles.length > 0) {
-    textEl.textContent = `${bubbles.length} bubble${bubbles.length === 1 ? "" : "s"} nearby`;
+    textEl.textContent = `${bubbles.length} communit${bubbles.length === 1 ? "y" : "ies"} nearby`;
     el.dataset.state = "idle";
   } else {
-    textEl.textContent = "Live nearby";
+    textEl.textContent = "Discover nearby";
     el.dataset.state = "idle";
   }
 }
@@ -1134,14 +1146,6 @@ function setupMapUi() {
   $("#sheet-backdrop")?.addEventListener("click", closeAllSheets);
   $("#create-sheet-close")?.addEventListener("click", closeAllSheets);
 
-  $("#fab-create")?.addEventListener("click", () => {
-    if (!hooks.hasPosition?.()) {
-      showOnboarding("Enable location to create a bubble where you are.");
-      return;
-    }
-    openCreateSheet();
-  });
-
   $("#btn-create-community")?.addEventListener("click", () => {
     if (!hooks.hasPosition?.()) {
       showOnboarding("Enable location to create a community where you are.");
@@ -1206,7 +1210,11 @@ function setupMapUi() {
   });
 
   $("#home-empty-create")?.addEventListener("click", () => {
-    $("#fab-create")?.click();
+    if (!hooks.hasPosition?.()) {
+      showOnboarding("Enable location to create a community where you are.");
+      return;
+    }
+    openCreateSheet();
   });
 
   $("#feed-search")?.addEventListener("focus", () => {
