@@ -22,6 +22,7 @@ import {
   showOnboarding,
 } from "./map-home.js";
 import { initQuestionPage, refreshQuestionComposer, teardownQuestionPage } from "./question-page.js";
+import { fmtTimeAgo } from "./questions.js";
 import { hasInterestProfile } from "./interests.js";
 
 const $ = (sel) => document.querySelector(sel);
@@ -32,7 +33,8 @@ const API_FETCH = { credentials: "include", cache: "no-store" };
 const WS_RECONNECT_BASE_MS = 3000;
 const WS_RECONNECT_MAX_MS = 20000;
 const MSG_COOLDOWN_MS = 1000;
-const COMPOSER_MAX_HEIGHT_PX = 144;
+const COMPOSER_MAX_HEIGHT_PX = 168;
+const COMPOSER_MIN_HEIGHT_PX = 40;
 const MAX_IMAGE_INPUT_BYTES = 8 * 1024 * 1024;
 const MAX_IMAGE_DIMENSION = 1600;
 const IMAGE_JPEG_QUALITY = 0.85;
@@ -40,6 +42,8 @@ const IMAGE_JPEG_QUALITY = 0.85;
 const bubbleId = (window.__BUBBLE_ID__ || "").trim() || null;
 const questionId = (window.__QUESTION_ID__ || "").trim() || null;
 
+let roomActiveCount = null;
+let lastMessageAt = null;
 let myName = "";
 const myPreviousNames = new Set();
 let pos = null;
@@ -154,7 +158,7 @@ function setReplyTarget(m) {
   const label = $("#reply-compose-label");
   const preview = $("#reply-compose-preview");
   const input = $("#chat-input");
-  if (label) label.textContent = `Reply to ${m.anonymous_name}`;
+  if (label) label.textContent = m.anonymous_name;
   if (preview) preview.textContent = replyPreviewText(m) || "Message";
   bar?.removeAttribute("hidden");
   setComposerHint("");
@@ -593,12 +597,40 @@ function refreshComposerAvailability() {
   }
 }
 
+function touchLastMessage(iso) {
+  if (!iso) return;
+  const t = new Date(iso);
+  if (Number.isNaN(t.getTime())) return;
+  if (!lastMessageAt || t > new Date(lastMessageAt)) {
+    lastMessageAt = iso;
+    renderRoomSubtitle();
+  }
+}
+
+function renderRoomSubtitle() {
+  const el = $("#room-subtitle");
+  if (!el) return;
+  const parts = [];
+  if (typeof roomActiveCount === "number") {
+    parts.push(
+      roomActiveCount > 0
+        ? `🟢 ${roomActiveCount} active nearby`
+        : "No one active right now",
+    );
+  }
+  if (lastMessageAt) {
+    const ago = fmtTimeAgo(lastMessageAt);
+    if (ago) parts.push(`Last message ${ago}`);
+  }
+  el.textContent = parts.join(" · ");
+  el.hidden = parts.length === 0;
+}
+
 function setOnlineCount(n) {
-  const text = typeof n === "number" ? `${n} active` : "";
-  const el = $("#online-count");
+  roomActiveCount = typeof n === "number" ? n : null;
   const menuEl = $("#room-menu-online");
-  if (el) el.textContent = text;
   if (menuEl) menuEl.textContent = typeof n === "number" ? String(n) : "—";
+  renderRoomSubtitle();
 }
 
 function setRoomMenuTitle(title) {
@@ -766,6 +798,7 @@ function appendMessage(m, opts = { scroll: true }) {
   list.appendChild(row);
   wireMessageImage(row.querySelector(".msg-image"));
   row.style.animation = "msg-in 0.28s ease-out";
+  touchLastMessage(m.created_at);
   if (opts.scroll) scrollMessages();
 }
 
@@ -1103,7 +1136,7 @@ function autoResizeComposer() {
   const el = getComposerInput();
   if (!el) return;
   el.style.height = "auto";
-  const next = Math.min(el.scrollHeight, COMPOSER_MAX_HEIGHT_PX);
+  const next = Math.min(Math.max(el.scrollHeight, COMPOSER_MIN_HEIGHT_PX), COMPOSER_MAX_HEIGHT_PX);
   el.style.height = `${next}px`;
   el.style.overflowY = el.scrollHeight > COMPOSER_MAX_HEIGHT_PX ? "auto" : "hidden";
 }
@@ -1241,6 +1274,7 @@ function loadHistory() {
         return;
       }
       for (const m of data.results) appendMessage(m, { scroll: false });
+      if (data.results.length) touchLastMessage(data.results[data.results.length - 1].created_at);
       scrollMessages();
     })
     .catch(() => {
@@ -1278,6 +1312,7 @@ function onEnterBubble() {
   }
 
   roomInitializedFor = bubbleId;
+  lastMessageAt = null;
   messageById.clear();
   clearReply();
   const messages = $("#messages");

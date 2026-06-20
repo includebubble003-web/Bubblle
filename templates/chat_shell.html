@@ -379,18 +379,13 @@
         <div class="room-header" id="room-meta">
           <div class="room-avatar topbar-desktop-only" id="room-avatar" aria-hidden="true">{% if bubble_id %}#{% else %}B{% endif %}</div>
           <div class="topbar-room">
-            <div class="topbar-room-head">
-              <h1 class="room-title" id="bubble-title">{% if bubble_id %}Chat{% else %}Bubblle{% endif %}</h1>
-              <span class="loc-pill topbar-loc-pill topbar-desktop-only" id="loc-pill" data-state="idle" title="Location" aria-label="Location status">
-                <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-4.35 7-11a7 7 0 1 0-14 0c0 6.65 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
-              </span>
-            </div>
+            <h1 class="room-title" id="bubble-title">{% if bubble_id %}Chat{% else %}Bubblle{% endif %}</h1>
+            <p class="room-subtitle" id="room-subtitle" hidden></p>
             <div class="room-stats topbar-desktop-only">
               <span class="conn-badge" id="conn-badge" data-state="idle">
                 <span class="conn-dot" id="conn-dot" data-state="idle"></span>
                 <span class="conn-label" id="conn-label">Connecting</span>
               </span>
-              <span class="room-stat room-stat-accent" id="online-count"></span>
             </div>
           </div>
         </div>
