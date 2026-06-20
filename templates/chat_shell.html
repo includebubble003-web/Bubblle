@@ -74,44 +74,19 @@
           </div>
         </div>
 
-        <div class="home-hero" id="home-hero">
-          <h1 class="home-hero-title">Find people around you who share your interests.</h1>
-          <p class="home-hero-sub">Join communities, ask questions, and discover local conversations.</p>
-        </div>
-
-        <div class="home-map-pane" id="home-map-pane">
-          <div class="home-map-wrap" id="home-map-wrap">
-            <div id="map" class="map-container" role="application" aria-label="Map of nearby bubbles"></div>
-            <div class="map-loading" id="map-loading" hidden aria-live="polite">
-              <div class="map-loading-shimmer" aria-hidden="true"></div>
-            </div>
-            <button type="button" class="map-recenter-btn" id="btn-map-recenter" hidden aria-label="Recenter on my location" title="My location">
-              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
-            </button>
-          </div>
-        </div>
-
         <div class="home-feed-pane" id="home-feed-scroll">
           <div class="home-feed-panel">
-            <div class="home-feed-handle" aria-hidden="true"></div>
-
             <div class="feed-search-sticky" id="feed-search-wrap">
-              <div class="home-action-row">
-                <button type="button" class="home-action-btn home-action-btn--ask" id="btn-ask-question">
-                  <svg class="home-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <circle cx="12" cy="12" r="9"/>
-                    <path d="M9.5 9a2.5 2.5 0 1 1 4.2 1.8c-.9.7-1.2 1.3-1.2 2.2"/>
-                    <circle cx="12" cy="17" r="0.75" fill="currentColor"/>
-                  </svg>
-                  Ask a Question
-                </button>
-                <button type="button" class="home-action-btn home-action-btn--create" id="btn-create-community">
-                  <svg class="home-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-                    <path d="M12 5v14M5 12h14"/>
-                  </svg>
-                  Create Community
-                </button>
+              <div class="home-hero" id="home-hero">
+                <h1 class="home-hero-title">Find people around you who share your interests.</h1>
+                <p class="home-hero-sub">Join communities, ask questions, and discover local conversations.</p>
               </div>
+
+              <p class="feed-live-strip" id="feed-live-strip">
+                <span class="feed-live-dot" aria-hidden="true"></span>
+                <span id="feed-live-text">Discover nearby</span>
+              </p>
+
               <div class="feed-search-row">
                 <label class="feed-search" for="feed-search">
                   <svg class="feed-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -131,16 +106,35 @@
                 </label>
                 <button type="button" class="feed-search-cancel" id="feed-search-cancel" hidden>Cancel</button>
               </div>
+
               <div class="feed-tabs-wrap" id="feed-tabs-wrap" hidden>
                 <div class="feed-tabs" role="tablist" aria-label="Discover content">
-                  <button type="button" class="feed-tab is-active" role="tab" id="feed-tab-btn-for-you" data-feed-tab="for-you" aria-selected="true" aria-controls="feed-panel-for-you">For You</button>
+                  <button type="button" class="feed-tab" role="tab" id="feed-tab-btn-for-you" data-feed-tab="for-you" aria-selected="false" aria-controls="feed-panel-for-you">For You</button>
                   <button type="button" class="feed-tab" role="tab" id="feed-tab-btn-questions" data-feed-tab="questions" aria-selected="false" aria-controls="feed-panel-questions">
                     Questions<span class="feed-tab-count" id="feed-tab-count-questions" hidden></span>
                   </button>
-                  <button type="button" class="feed-tab" role="tab" id="feed-tab-btn-communities" data-feed-tab="communities" aria-selected="false" aria-controls="feed-panel-communities">
+                  <button type="button" class="feed-tab is-active" role="tab" id="feed-tab-btn-communities" data-feed-tab="communities" aria-selected="true" aria-controls="feed-panel-communities">
                     Communities<span class="feed-tab-count" id="feed-tab-count-communities" hidden></span>
                   </button>
+                  <button type="button" class="feed-tab" role="tab" id="feed-tab-btn-map" data-feed-tab="map" aria-selected="false" aria-controls="feed-panel-map">Map</button>
                 </div>
+              </div>
+
+              <div class="feed-tab-actions" id="feed-tab-actions" hidden>
+                <button type="button" class="feed-tab-action-btn feed-tab-action-btn--ask" id="feed-tab-action-ask" hidden>
+                  <svg class="home-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9"/>
+                    <path d="M9.5 9a2.5 2.5 0 1 1 4.2 1.8c-.9.7-1.2 1.3-1.2 2.2"/>
+                    <circle cx="12" cy="17" r="0.75" fill="currentColor"/>
+                  </svg>
+                  Ask a Question
+                </button>
+                <button type="button" class="feed-tab-action-btn feed-tab-action-btn--create" id="feed-tab-action-create" hidden>
+                  <svg class="home-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14"/>
+                  </svg>
+                  Create Community
+                </button>
               </div>
             </div>
 
@@ -202,7 +196,7 @@
               </div>
 
               <div class="feed-tab-panels" id="feed-tab-panels" hidden>
-                <div class="feed-tab-panel is-active" id="feed-panel-for-you" data-feed-tab-panel="for-you" role="tabpanel" aria-labelledby="feed-tab-btn-for-you">
+                <div class="feed-tab-panel" id="feed-panel-for-you" data-feed-tab-panel="for-you" role="tabpanel" aria-labelledby="feed-tab-btn-for-you" hidden>
                   <section class="feed-section feed-section--recommended" id="feed-recommended-section" hidden>
                     <div class="feed-section-head">
                       <h2 class="feed-section-title">Recommended For You</h2>
@@ -239,7 +233,7 @@
                   </div>
                 </div>
 
-                <div class="feed-tab-panel" id="feed-panel-communities" data-feed-tab-panel="communities" role="tabpanel" aria-labelledby="feed-tab-btn-communities" hidden>
+                <div class="feed-tab-panel is-active" id="feed-panel-communities" data-feed-tab-panel="communities" role="tabpanel" aria-labelledby="feed-tab-btn-communities">
                   <section class="feed-section" id="feed-nearby-section" hidden>
                     <div class="feed-section-head">
                       <h2 class="feed-section-title">Communities Near You</h2>
@@ -266,7 +260,35 @@
 
                   <div class="feed-tab-empty" id="feed-tab-empty-communities" hidden>
                     <p class="feed-tab-empty-title">No communities nearby yet</p>
-                    <p class="feed-tab-empty-lead">Start one with Create Community or check back soon.</p>
+                    <p class="feed-tab-empty-lead">Tap Create Community above to start one.</p>
+                  </div>
+                </div>
+
+                <div class="feed-tab-panel feed-tab-panel--map" id="feed-panel-map" data-feed-tab-panel="map" role="tabpanel" aria-labelledby="feed-tab-btn-map" hidden>
+                  <div class="map-tab-view">
+                    <div class="map-tab-map-wrap home-map-wrap" id="home-map-wrap">
+                      <div id="map" class="map-container" role="application" aria-label="Map of nearby bubbles and questions"></div>
+                      <div class="map-loading" id="map-loading" hidden aria-live="polite">
+                        <div class="map-loading-shimmer" aria-hidden="true"></div>
+                      </div>
+                      <button type="button" class="map-recenter-btn" id="btn-map-recenter" hidden aria-label="Recenter on my location" title="My location">
+                        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+                      </button>
+                    </div>
+
+                    <section class="feed-section feed-section--map-list" id="feed-map-communities-section" hidden>
+                      <div class="feed-section-head">
+                        <h2 class="feed-section-title">Communities on map</h2>
+                      </div>
+                      <div class="feed-card-list" id="feed-map-communities"></div>
+                    </section>
+
+                    <section class="feed-section feed-section--map-list" id="feed-map-questions-section" hidden>
+                      <div class="feed-section-head">
+                        <h2 class="feed-section-title">Questions on map</h2>
+                      </div>
+                      <div class="feed-card-list" id="feed-map-questions"></div>
+                    </section>
                   </div>
                 </div>
               </div>

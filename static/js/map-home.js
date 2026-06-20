@@ -34,7 +34,9 @@ import {
 let map = null;
 let userMarker = null;
 let markersLayer = null;
+let questionMarkersLayer = null;
 const markerById = new Map();
+const questionMarkerById = new Map();
 const bubbleById = new Map();
 let hooks = {};
 let feedLoading = false;
@@ -43,6 +45,7 @@ let selectedBubbleId = null;
 let mapMoveTimer = null;
 let suppressMapMoveRefresh = false;
 const markerStateById = new Map();
+const questionMarkerStateById = new Map();
 let similarSearchTimer = null;
 let similarFetchAbort = null;
 const SIMILAR_SEARCH_MS = 320;
@@ -136,6 +139,19 @@ function bubbleIconHtml(b, { trending = false, isNew = false, selected = false }
   </div>`;
 }
 
+function questionMarkerHtml(q) {
+  const replies = Number(q.reply_count) || 0;
+  const hot = replies >= 3;
+  return `<div class="map-question-marker${hot ? " map-question-marker--hot" : ""}" data-question-id="${escapeHtml(q.id)}" title="${escapeHtml(q.title || "Question")}">
+    <span class="map-question-marker-icon" aria-hidden="true">?</span>
+    ${replies > 0 ? `<span class="map-question-marker-count">${replies}</span>` : ""}
+  </div>`;
+}
+
+function questionMarkerFingerprint(q) {
+  return `${q.id}|${q.latitude}|${q.longitude}|r:${q.reply_count || 0}`;
+}
+
 function invalidateMapSoon() {
   if (!map) return;
   requestAnimationFrame(() => {
@@ -182,6 +198,7 @@ function ensureMap() {
   L.control.zoom({ position: "bottomright" }).addTo(map);
 
   markersLayer = L.layerGroup().addTo(map);
+  questionMarkersLayer = L.layerGroup().addTo(map);
 
   userMarker = L.circleMarker([0, 0], {
     radius: 8,
@@ -321,6 +338,53 @@ function syncMapMarkers(bubbles) {
   }
 
   updateLiveBadge(bubbles);
+}
+
+function syncMapQuestionMarkers(questions) {
+  ensureMap();
+  if (!map || !questionMarkersLayer) return;
+
+  const valid = (questions || []).filter(
+    (q) => Number.isFinite(q.latitude) && Number.isFinite(q.longitude),
+  );
+  const nextIds = new Set(valid.map((q) => q.id));
+
+  for (const [id, marker] of questionMarkerById) {
+    if (!nextIds.has(id)) {
+      questionMarkersLayer.removeLayer(marker);
+      questionMarkerById.delete(id);
+      questionMarkerStateById.delete(id);
+    }
+  }
+
+  for (const q of valid) {
+    const latlng = [q.latitude, q.longitude];
+    const fp = questionMarkerFingerprint(q);
+    let marker = questionMarkerById.get(q.id);
+    const icon = L.divIcon({
+      className: "map-question-marker-wrap",
+      html: questionMarkerHtml(q),
+      iconSize: [32, 36],
+      iconAnchor: [16, 18],
+    });
+
+    if (marker) {
+      marker.setLatLng(latlng);
+      if (questionMarkerStateById.get(q.id) !== fp) {
+        marker.setIcon(icon);
+        questionMarkerStateById.set(q.id, fp);
+      }
+    } else {
+      marker = L.marker(latlng, { icon, zIndexOffset: 200 });
+      marker.on("click", (e) => {
+        L.DomEvent.stopPropagation(e);
+        window.location.href = questionHref(q.id);
+      });
+      marker.addTo(questionMarkersLayer);
+      questionMarkerById.set(q.id, marker);
+      questionMarkerStateById.set(q.id, fp);
+    }
+  }
 }
 
 export function selectBubble(id, { scroll = false, pan = false } = {}) {
@@ -557,13 +621,15 @@ function renderFeedSection(sectionId, containerId, items, options = {}) {
 let feedSearchQuery = "";
 let feedSearchModeActive = false;
 
-const FEED_TABS = ["for-you", "questions", "communities"];
+const FEED_TABS = ["for-you", "questions", "communities", "map"];
 const FEED_TAB_SWIPE_THRESHOLD = 52;
 const FEED_TAB_SWIPE_MAX_VERTICAL = 48;
+const HERO_DISMISSED_KEY = "bbl_hero_dismissed";
 
-let activeFeedTab = "for-you";
-const feedTabScrollPositions = { "for-you": 0, questions: 0, communities: 0 };
+let activeFeedTab = "communities";
+const feedTabScrollPositions = { "for-you": 0, questions: 0, communities: 0, map: 0 };
 let feedTabSwipeStart = null;
+let heroDismissListener = null;
 
 function setFeedTabsVisible(visible) {
   $("#feed-tabs-wrap")?.toggleAttribute("hidden", !visible);
@@ -585,6 +651,54 @@ function applyFeedTabPanel(tab) {
     panel.classList.toggle("is-active", on);
     panel.toggleAttribute("hidden", !on);
   });
+
+  updateFeedTabActions(tab);
+
+  if (tab === "map") {
+    ensureMap();
+    invalidateMapSoon();
+  }
+}
+
+function updateFeedTabActions(tab) {
+  const bar = $("#feed-tab-actions");
+  const askBtn = $("#feed-tab-action-ask");
+  const createBtn = $("#feed-tab-action-create");
+  const showBar = tab === "questions" || tab === "communities";
+  if (bar) bar.hidden = !showBar || !feedTabsInteractive();
+  askBtn?.toggleAttribute("hidden", tab !== "questions");
+  createBtn?.toggleAttribute("hidden", tab !== "communities");
+}
+
+function dismissHero() {
+  const hero = $("#home-hero");
+  if (!hero || hero.hidden) return;
+  safeSetItem(HERO_DISMISSED_KEY, "1");
+  hero.classList.add("home-hero--collapsed");
+  window.setTimeout(() => {
+    hero.hidden = true;
+  }, 260);
+  if (heroDismissListener) {
+    $("#home-feed-scroll")?.removeEventListener("scroll", heroDismissListener);
+    heroDismissListener = null;
+  }
+}
+
+function initHeroBehavior() {
+  const hero = $("#home-hero");
+  if (!hero) return;
+  if (safeGetItem(HERO_DISMISSED_KEY) === "1") {
+    hero.hidden = true;
+    hero.classList.add("home-hero--collapsed");
+    return;
+  }
+  hero.hidden = false;
+  hero.classList.remove("home-hero--collapsed");
+  if (heroDismissListener) return;
+  heroDismissListener = () => {
+    if (($("#home-feed-scroll")?.scrollTop ?? 0) > 8) dismissHero();
+  };
+  $("#home-feed-scroll")?.addEventListener("scroll", heroDismissListener, { passive: true });
 }
 
 function setFeedTab(tab, { restoreScroll = false, saveCurrent = true } = {}) {
@@ -651,7 +765,8 @@ function setupFeedTabGestures() {
   area.addEventListener(
     "touchstart",
     (e) => {
-      if (!feedTabsInteractive()) return;
+      if (!feedTabsInteractive() || activeFeedTab === "map") return;
+      if (e.target.closest(".leaflet-container, .map-tab-map-wrap")) return;
       const t = e.changedTouches[0];
       feedTabSwipeStart = { x: t.clientX, y: t.clientY };
     },
@@ -661,7 +776,8 @@ function setupFeedTabGestures() {
   area.addEventListener(
     "touchend",
     (e) => {
-      if (!feedTabSwipeStart || !feedTabsInteractive()) return;
+      if (!feedTabSwipeStart || !feedTabsInteractive() || activeFeedTab === "map") return;
+      if (e.target.closest(".leaflet-container, .map-tab-map-wrap")) return;
       const t = e.changedTouches[0];
       const dx = t.clientX - feedTabSwipeStart.x;
       const dy = t.clientY - feedTabSwipeStart.y;
@@ -766,7 +882,10 @@ function setSearchModeUi(active) {
   $("#home-split")?.classList.toggle("home-split--search-mode", active);
   $("#map-screen")?.classList.toggle("home-screen--search-mode", active);
   $("#feed-search-cancel")?.toggleAttribute("hidden", !active);
-  if (active) setFeedTabsVisible(false);
+  if (active) {
+    setFeedTabsVisible(false);
+    $("#feed-tab-actions")?.setAttribute("hidden", "hidden");
+  }
 }
 
 function enterSearchMode() {
@@ -826,12 +945,31 @@ function hideStandardFeedSections() {
   $("#feed-trending-section")?.setAttribute("hidden", "hidden");
   $("#feed-recent-section")?.setAttribute("hidden", "hidden");
   $("#feed-discover-section")?.setAttribute("hidden", "hidden");
+  $("#feed-map-communities-section")?.setAttribute("hidden", "hidden");
+  $("#feed-map-questions-section")?.setAttribute("hidden", "hidden");
   $("#feed-questions")?.replaceChildren();
   $("#feed-recommended")?.replaceChildren();
   $("#feed-nearby")?.replaceChildren();
   $("#feed-trending")?.replaceChildren();
   $("#feed-recent")?.replaceChildren();
   $("#feed-discover")?.replaceChildren();
+  $("#feed-map-communities")?.replaceChildren();
+  $("#feed-map-questions")?.replaceChildren();
+}
+
+function renderMapTabDiscover(bubbles, questions) {
+  const nearby = sortByDistance(bubbles).slice(0, 6);
+  renderFeedSection("#feed-map-communities-section", "#feed-map-communities", nearby, {
+    allBubbles: bubbles,
+  });
+  const qItems = questions.slice(0, 6);
+  if (qItems.length) {
+    $("#feed-map-questions-section")?.removeAttribute("hidden");
+    syncQuestionSection($("#feed-map-questions"), qItems);
+  } else {
+    $("#feed-map-questions-section")?.setAttribute("hidden", "hidden");
+    $("#feed-map-questions")?.replaceChildren();
+  }
 }
 
 function renderStandardFeedSections(bubbles, questions) {
@@ -884,8 +1022,10 @@ function renderStandardFeedSections(bubbles, questions) {
     allBubbles: bubbles,
   });
   renderQuestionFeedSection(questions, 8);
+  renderMapTabDiscover(bubbles, questions);
   updateFeedTabCounts(questions, bubbles);
   updateFeedTabEmptyStates();
+  updateFeedTabActions(activeFeedTab);
 }
 
 function hideSearchResultSections() {
@@ -1030,20 +1170,22 @@ function setFeedLoading(loading) {
 
 function updateLiveBadge(bubbles) {
   const el = $("#map-live-count");
-  if (!el) return;
-  const textEl = el.querySelector(".live-nearby-text");
-  if (!textEl) return;
+  const textEl = el?.querySelector(".live-nearby-text");
+  const feedLive = $("#feed-live-text");
+  const feedStrip = $("#feed-live-strip");
   const total = bubbles.reduce((s, b) => s + activeUsers(b), 0);
+  let text = "Discover nearby";
+  let live = false;
   if (total > 0) {
-    textEl.textContent = `${total} ${total === 1 ? "local" : "locals"} active now`;
-    el.dataset.state = "live";
+    text = `${total} ${total === 1 ? "local" : "locals"} active`;
+    live = true;
   } else if (bubbles.length > 0) {
-    textEl.textContent = `${bubbles.length} communit${bubbles.length === 1 ? "y" : "ies"} nearby`;
-    el.dataset.state = "idle";
-  } else {
-    textEl.textContent = "Discover nearby";
-    el.dataset.state = "idle";
+    text = `${bubbles.length} communit${bubbles.length === 1 ? "y" : "ies"} nearby`;
   }
+  if (textEl) textEl.textContent = text;
+  if (feedLive) feedLive.textContent = text;
+  if (el) el.dataset.state = live ? "live" : "idle";
+  feedStrip?.classList.toggle("feed-live-strip--live", live);
 }
 
 function setMapLoading(loading) {
@@ -1289,21 +1431,24 @@ function setupMapUi() {
   $("#sheet-backdrop")?.addEventListener("click", closeAllSheets);
   $("#create-sheet-close")?.addEventListener("click", closeAllSheets);
 
-  $("#btn-create-community")?.addEventListener("click", () => {
+  const openCreate = () => {
     if (!hooks.hasPosition?.()) {
       showOnboarding("Enable location to create a community where you are.");
       return;
     }
     openCreateSheet();
-  });
+  };
 
-  $("#btn-ask-question")?.addEventListener("click", () => {
+  const openAsk = () => {
     if (!hooks.hasPosition?.()) {
       showOnboarding("Enable location to ask a question nearby.");
       return;
     }
     openAskQuestionSheet();
-  });
+  };
+
+  $("#feed-tab-action-create")?.addEventListener("click", openCreate);
+  $("#feed-tab-action-ask")?.addEventListener("click", openAsk);
 
   $("#ask-question-close")?.addEventListener("click", closeAllSheets);
 
@@ -1365,6 +1510,7 @@ function setupMapUi() {
   });
 
   setupFeedTabs();
+  initHeroBehavior();
 
   $("#feed-search")?.addEventListener("input", (e) => {
     feedSearchQuery = e.target.value || "";
@@ -1554,5 +1700,6 @@ export function onMapPositionUpdate(pos) {
 
 export function onMapBubblesUpdated(bubbles, questions = hooks.getNearbyQuestions?.() || []) {
   syncMapMarkers(bubbles);
+  syncMapQuestionMarkers(questions);
   renderBubbleFeed(bubbles, questions);
 }
