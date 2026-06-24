@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static_v %}
 {% block title %}Bubble · Bubblle{% endblock %}
 {% block content %}
 <section class="panel chat-header">
@@ -30,5 +30,5 @@
 <script>
   window.__BUBBLE_ID__ = "{{ bubble_id }}";
 </script>
-<script src="{% static 'js/bubble.js' %}" type="module"></script>
+<script src="{% static_v 'js/bubble.js' %}" type="module"></script>
 {% endblock %}

@@ -381,7 +381,7 @@ function applyPosition(p, { reconnectWs = false } = {}) {
 function loadBubbleMeta() {
   if (!pos) return;
   const q = new URLSearchParams({ lat: String(pos.lat), lng: String(pos.lng) });
-  fetch(`/api/bubbles/${bubbleId}/?${q}`, { credentials: "include" })
+  fetch(`/api/bubbles/${bubbleId}/?${q}`, { credentials: "include", cache: "no-store" })
     .then((res) => (res.ok ? res.json() : null))
     .then((b) => {
       if (!b) {
@@ -415,7 +415,7 @@ function loadBubbleMeta() {
 }
 
 function loadHistory() {
-  fetch(`/api/bubbles/${bubbleId}/messages/?limit=80`, { credentials: "include" })
+  fetch(`/api/bubbles/${bubbleId}/messages/?limit=80`, { credentials: "include", cache: "no-store" })
     .then((res) => (res.ok ? res.json() : null))
     .then((data) => {
       if (!data?.results?.length) {

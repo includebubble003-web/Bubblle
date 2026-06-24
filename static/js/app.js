@@ -95,7 +95,10 @@ async function refreshNearby() {
     lng: String(pos.lng),
     search_radius_m: String(SEARCH_RADIUS_M),
   });
-  const res = await fetch(`/api/bubbles/nearby/?${params}`, { credentials: "include" });
+  const res = await fetch(`/api/bubbles/nearby/?${params}`, {
+    credentials: "include",
+    cache: "no-store",
+  });
   if (!res.ok) {
     $("#empty-state").hidden = false;
     $("#empty-state").textContent = "Could not load bubbles.";
@@ -225,6 +228,7 @@ function main() {
       const res = await fetch("/api/bubbles/", {
         method: "POST",
         credentials: "include",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: fd.get("title"), latitude: pos.lat, longitude: pos.lng }),
       });

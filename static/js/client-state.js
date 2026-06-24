@@ -2,7 +2,7 @@
  * Versioned client storage — migrate/clear stale data on app upgrades.
  */
 
-export const CLIENT_STORAGE_VERSION = 2;
+export const CLIENT_STORAGE_VERSION = 3;
 const VERSION_KEY = "bbl_client_version";
 
 const LOCAL_KEYS = ["bbl_anon_name", "bbl_session_uuid"];

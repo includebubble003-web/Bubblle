@@ -34,7 +34,7 @@ services:
              daphne -b 0.0.0.0 -p 8000 bubblle.asgi:application"
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-insecure-change-me}
-      DJANGO_DEBUG: ${DJANGO_DEBUG:-1}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-0}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1},web
       POSTGRES_DB: ${POSTGRES_DB:-bubblle}
       POSTGRES_USER: ${POSTGRES_USER:-bubblle}
@@ -62,7 +62,7 @@ services:
       sh -c "while true; do python manage.py purge_old_messages; sleep 3600; done"
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-insecure-change-me}
-      DJANGO_DEBUG: ${DJANGO_DEBUG:-1}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-0}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
       POSTGRES_DB: ${POSTGRES_DB:-bubblle}
       POSTGRES_USER: ${POSTGRES_USER:-bubblle}
@@ -83,7 +83,7 @@ services:
     command: python manage.py run_ai_chat_agents --base-url http://web:8000
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-insecure-change-me}
-      DJANGO_DEBUG: ${DJANGO_DEBUG:-1}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-0}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1},web
       POSTGRES_DB: ${POSTGRES_DB:-bubblle}
       POSTGRES_USER: ${POSTGRES_USER:-bubblle}

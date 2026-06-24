@@ -6,6 +6,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from bubblle.whitenoise_headers import is_content_hashed_static, whitenoise_add_headers
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load project .env (local dev). In Docker, vars come from compose env_file / environment.
@@ -43,7 +45,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "bubblle.middleware.ApiNoCacheMiddleware",
+    "bubblle.middleware.CacheControlMiddleware",
 ]
 
 ROOT_URLCONF = "bubblle.urls"
@@ -92,9 +94,17 @@ TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Bump on deploy when frontend behavior/storage schema changes (see client-state.js).
+BUBBLLE_CLIENT_VERSION = os.environ.get("BUBBLLE_CLIENT_VERSION", "3")
+# Optional explicit static cache-bust query param in templates (DEBUG / unhashed assets).
+BUBBLLE_STATIC_VERSION = os.environ.get(
+    "BUBBLLE_STATIC_VERSION",
+    BUBBLLE_CLIENT_VERSION,
+)
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
@@ -111,7 +121,10 @@ BUBBLLE_PUBLIC_BASE_URL = os.environ.get("BUBBLLE_PUBLIC_BASE_URL", "").strip().
 
 # In DEBUG, serve from app static dirs without running collectstatic; in prod, use STATIC_ROOT (Docker build).
 WHITENOISE_USE_FINDERS = DEBUG
-WHITENOISE_MAX_AGE = 60 * 60 * 24 * 30 if not DEBUG else 0
+# Non-immutable static files must revalidate (ES module imports use unhashed paths).
+WHITENOISE_MAX_AGE = 0
+WHITENOISE_ADD_HEADERS_FUNCTION = whitenoise_add_headers
+WHITENOISE_IMMUTABLE_FILE_TEST = is_content_hashed_static
 
 if not DEBUG:
     STORAGES = {
@@ -122,9 +135,6 @@ if not DEBUG:
             "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
         },
     }
-
-# Bumped when client storage schema or critical frontend behavior changes.
-BUBBLLE_CLIENT_VERSION = os.environ.get("BUBBLLE_CLIENT_VERSION", "2")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
