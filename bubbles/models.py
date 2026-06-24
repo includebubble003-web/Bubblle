@@ -46,6 +46,9 @@ class Message(models.Model):
     image = models.ImageField(upload_to="chat/%Y/%m/%d/", blank=True, null=True)
     image_width = models.PositiveIntegerField(null=True, blank=True)
     image_height = models.PositiveIntegerField(null=True, blank=True)
+    pdf = models.FileField(upload_to="chat/%Y/%m/%d/", blank=True, null=True)
+    pdf_name = models.CharField(max_length=255, blank=True, default="")
+    pdf_size = models.PositiveIntegerField(null=True, blank=True)
     reply_to = models.ForeignKey(
         "self",
         null=True,

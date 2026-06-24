@@ -3,7 +3,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from .models import Bubble, Message, Question, Reply
-from .services import message_image_url
+from .services import message_image_url, message_pdf_url
 
 
 class BubbleCreateSerializer(serializers.ModelSerializer):
@@ -48,9 +48,20 @@ class MessageImageUploadSerializer(serializers.Serializer):
     reply_to = serializers.UUIDField(required=False, allow_null=True)
 
 
+class MessagePdfUploadSerializer(serializers.Serializer):
+    pdf = serializers.FileField()
+    latitude = serializers.FloatField(min_value=-90, max_value=90)
+    longitude = serializers.FloatField(min_value=-180, max_value=180)
+    message = serializers.CharField(
+        max_length=500, required=False, allow_blank=True, trim_whitespace=True
+    )
+    reply_to = serializers.UUIDField(required=False, allow_null=True)
+
+
 class MessageOutSerializer(serializers.ModelSerializer):
     reply_to = serializers.SerializerMethodField()
     image_url = serializers.SerializerMethodField()
+    pdf_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
@@ -63,10 +74,16 @@ class MessageOutSerializer(serializers.ModelSerializer):
             "image_url",
             "image_width",
             "image_height",
+            "pdf_url",
+            "pdf_name",
+            "pdf_size",
         )
 
     def get_image_url(self, obj: Message) -> str | None:
         return message_image_url(obj)
+
+    def get_pdf_url(self, obj: Message) -> str | None:
+        return message_pdf_url(obj)
 
     def get_reply_to(self, obj: Message):
         parent = getattr(obj, "reply_to", None)
@@ -75,6 +92,8 @@ class MessageOutSerializer(serializers.ModelSerializer):
         preview = parent.message or ""
         if not preview and parent.image:
             preview = "📷 Photo"
+        elif not preview and parent.pdf:
+            preview = "📄 PDF"
         out = {
             "id": str(parent.id),
             "anonymous_name": parent.anonymous_name,
@@ -83,6 +102,11 @@ class MessageOutSerializer(serializers.ModelSerializer):
         reply_image_url = message_image_url(parent)
         if reply_image_url:
             out["image_url"] = reply_image_url
+        reply_pdf_url = message_pdf_url(parent)
+        if reply_pdf_url:
+            out["pdf_url"] = reply_pdf_url
+            if parent.pdf_name:
+                out["pdf_name"] = parent.pdf_name
         return out
 
 

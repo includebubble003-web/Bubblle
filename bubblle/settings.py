@@ -114,6 +114,7 @@ BUBBLLE_IMAGE_MAX_BYTES = int(os.environ.get("BUBBLLE_IMAGE_MAX_BYTES", str(5 * 
 BUBBLLE_IMAGE_MAX_DIMENSION = int(os.environ.get("BUBBLLE_IMAGE_MAX_DIMENSION", "1280"))
 BUBBLLE_IMAGE_JPEG_QUALITY = int(os.environ.get("BUBBLLE_IMAGE_JPEG_QUALITY", "82"))
 BUBBLLE_IMAGE_WEBP_QUALITY = int(os.environ.get("BUBBLLE_IMAGE_WEBP_QUALITY", "80"))  # legacy alias
+BUBBLLE_PDF_MAX_BYTES = int(os.environ.get("BUBBLLE_PDF_MAX_BYTES", str(10 * 1024 * 1024)))
 
 # Public site URL for absolute image links (optional). e.g. https://bubblle.me
 # Leave empty to use same-origin relative URLs (recommended).

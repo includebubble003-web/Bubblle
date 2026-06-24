@@ -22,11 +22,21 @@ urlpatterns = [
         views.message_image_file,
         name="api-message-image-file",
     ),
+    path(
+        "bubbles/messages/<uuid:message_id>/pdf/",
+        views.message_pdf_file,
+        name="api-message-pdf-file",
+    ),
     path("bubbles/<uuid:bubble_id>/", views.bubble_detail, name="api-bubble-detail"),
     path("bubbles/<uuid:bubble_id>/messages/", views.bubble_messages, name="api-bubble-messages"),
     path(
         "bubbles/<uuid:bubble_id>/messages/image/",
         views.bubble_message_image,
         name="api-bubble-message-image",
+    ),
+    path(
+        "bubbles/<uuid:bubble_id>/messages/pdf/",
+        views.bubble_message_pdf,
+        name="api-bubble-message-pdf",
     ),
 ]

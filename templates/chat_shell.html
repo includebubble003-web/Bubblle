@@ -563,6 +563,9 @@
             <button type="button" class="composer-media-btn composer-media-btn--camera" id="btn-image-camera" title="Take photo" aria-label="Take photo" disabled>
               <svg class="icon icon-composer-media" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z"/><circle cx="12" cy="13" r="3.25"/></svg>
             </button>
+            <button type="button" class="composer-media-btn composer-media-btn--pdf" id="btn-pdf-upload" title="Upload PDF" aria-label="Upload PDF" disabled>
+              <svg class="icon icon-composer-media" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>
+            </button>
           </div>
           <textarea id="chat-input" class="chat-input" rows="1" autocomplete="off" maxlength="2000" placeholder="Type a message…" disabled aria-label="Message"></textarea>
         </div>
@@ -573,6 +576,7 @@
       </form>
       <input type="file" id="image-gallery-input" accept="image/*" hidden />
       <input type="file" id="image-camera-input" accept="image/*" capture="environment" hidden />
+      <input type="file" id="pdf-upload-input" accept="application/pdf,.pdf" hidden />
       <p class="composer-hint muted" id="composer-hint" hidden></p>
     </footer>
   </div>

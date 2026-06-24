@@ -48,6 +48,8 @@ class Command(BaseCommand):
         for msg in qs.iterator(chunk_size=200):
             if msg.image:
                 msg.image.delete(save=False)
+            if msg.pdf:
+                msg.pdf.delete(save=False)
             msg.delete()
             deleted += 1
 

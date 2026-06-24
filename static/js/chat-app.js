@@ -37,6 +37,7 @@ const COMPOSER_MAX_HEIGHT_PX = 168;
 const COMPOSER_MIN_HEIGHT_PX = 40;
 const MAX_IMAGE_INPUT_BYTES = 8 * 1024 * 1024;
 const MAX_IMAGE_DIMENSION = 1600;
+const MAX_PDF_BYTES = 10 * 1024 * 1024;
 const IMAGE_JPEG_QUALITY = 0.85;
 
 const bubbleId = (window.__BUBBLE_ID__ || "").trim() || null;
@@ -104,7 +105,16 @@ function rememberMessage(m) {
 function replyPreviewText(reply) {
   if (reply?.message) return truncateText(reply.message);
   if (reply?.image_url) return "📷 Photo";
+  if (reply?.pdf_url) return "📄 PDF";
   return "";
+}
+
+function formatFileSize(bytes) {
+  const n = Number(bytes);
+  if (!Number.isFinite(n) || n <= 0) return "";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(n < 10 * 1024 ? 1 : 0)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function replyQuoteHtml(reply) {
@@ -136,13 +146,16 @@ function messageFromRow(row) {
   const author = authorEl?.textContent?.trim() || (row.classList.contains("msg-bubble-mine") ? myName : "");
   const text = textEl?.textContent || "";
   const imageUrl = imgEl?.getAttribute("src") || null;
-  if (!author && !text && !imageUrl) return null;
+  const pdfEl = row.querySelector(".msg-pdf-link");
+  const pdfUrl = pdfEl?.getAttribute("href") || null;
+  if (!author && !text && !imageUrl && !pdfUrl) return null;
 
   return {
     id: row.dataset.messageId,
     anonymous_name: author || "Unknown",
     message: text,
     image_url: imageUrl,
+    pdf_url: pdfUrl,
   };
 }
 
@@ -153,6 +166,8 @@ function setReplyTarget(m) {
     anonymous_name: m.anonymous_name,
     message: m.message,
     image_url: m.image_url || null,
+    pdf_url: m.pdf_url || null,
+    pdf_name: m.pdf_name || null,
   };
   const bar = $("#reply-compose");
   const label = $("#reply-compose-label");
@@ -666,7 +681,7 @@ function isSendOnCooldown() {
 }
 
 function setMediaButtonsEnabled(on) {
-  for (const id of ["#btn-image-gallery", "#btn-image-camera"]) {
+  for (const id of ["#btn-image-gallery", "#btn-image-camera", "#btn-pdf-upload"]) {
     const btn = $(id);
     if (!btn) continue;
     btn.disabled = !on;
@@ -738,6 +753,28 @@ function messageBodyHtml(m) {
       <img class="msg-image${pendingClass}" src="${escapeHtml(imageUrl)}" alt="${alt}" loading="eager" decoding="async" />
     </a>`;
   }
+  const pdfUrl = mediaUrl(m.pdf_url);
+  if (pdfUrl || (m._pending && m.pdf_name)) {
+    const name = escapeHtml(m.pdf_name || "Document.pdf");
+    const size = formatFileSize(m.pdf_size);
+    if (pdfUrl) {
+      html += `<a class="msg-pdf-link" href="${escapeHtml(pdfUrl)}" target="_blank" rel="noopener noreferrer">
+        <span class="msg-pdf-icon" aria-hidden="true">PDF</span>
+        <span class="msg-pdf-meta">
+          <span class="msg-pdf-name">${name}</span>
+          ${size ? `<span class="msg-pdf-size">${escapeHtml(size)}</span>` : ""}
+        </span>
+      </a>`;
+    } else {
+      html += `<div class="msg-pdf-link msg-pdf-link--pending" aria-busy="true">
+        <span class="msg-pdf-icon" aria-hidden="true">PDF</span>
+        <span class="msg-pdf-meta">
+          <span class="msg-pdf-name">${name}</span>
+          ${size ? `<span class="msg-pdf-size">${escapeHtml(size)}</span>` : ""}
+        </span>
+      </div>`;
+    }
+  }
   if (m.message) {
     html += `<p class="msg-text">${escapeHtml(m.message)}</p>`;
   }
@@ -772,11 +809,16 @@ function appendMessage(m, opts = { scroll: true }) {
   if (m?.id && messageById.has(String(m.id))) return;
   clearMessagesPlaceholder();
   const imageUrl = mediaUrl(m.image_url);
-  rememberMessage({ ...m, image_url: imageUrl || m.image_url || null });
+  const pdfUrl = mediaUrl(m.pdf_url);
+  rememberMessage({
+    ...m,
+    image_url: imageUrl || m.image_url || null,
+    pdf_url: pdfUrl || m.pdf_url || null,
+  });
   const list = $("#messages");
   const mine = isMyMessage(m.anonymous_name);
   const row = document.createElement("div");
-  row.className = `msg-bubble${mine ? " msg-bubble-mine" : ""}${imageUrl ? " msg-bubble-has-image" : ""}`;
+  row.className = `msg-bubble${mine ? " msg-bubble-mine" : ""}${imageUrl ? " msg-bubble-has-image" : ""}${pdfUrl || (m._pending && m.pdf_name) ? " msg-bubble-has-pdf" : ""}`;
   row.dataset.messageId = String(m.id);
   row.setAttribute("role", "button");
   row.setAttribute("tabindex", "0");
@@ -1002,6 +1044,96 @@ async function compressImageFile(file) {
   return blob;
 }
 
+function isPdfFile(file) {
+  if (!file) return false;
+  if (file.type === "application/pdf") return true;
+  return /\.pdf$/i.test(file.name || "");
+}
+
+async function uploadChatPdf(file) {
+  if (!bubbleId) return;
+  if (!isPdfFile(file)) {
+    setComposerHint("Please choose a PDF file.", { kind: "cooldown" });
+    return;
+  }
+  if (file.size > MAX_PDF_BYTES) {
+    setComposerHint("PDF is too large (max 10 MB).", { kind: "cooldown" });
+    return;
+  }
+  if (!bubbleActive) {
+    setComposerHint("This community is unavailable.", { kind: "cooldown" });
+    return;
+  }
+  if (!pos) {
+    setComposerHint("Allow location to send files, then try again.", { kind: "cooldown" });
+    return;
+  }
+  if (isSendOnCooldown()) {
+    refreshCooldownUi();
+    return;
+  }
+
+  const replySnapshot = pendingReply ? { ...pendingReply } : null;
+  const caption = $("#chat-input")?.value.trim() || "";
+  let pendingId = null;
+
+  setMediaButtonsEnabled(false);
+  setComposerHint("Uploading PDF…", { kind: "info" });
+
+  try {
+    pendingId = `pending-${Date.now()}`;
+    appendMessage({
+      id: pendingId,
+      anonymous_name: myName || "You",
+      message: caption,
+      pdf_name: file.name || "document.pdf",
+      pdf_size: file.size,
+      created_at: new Date().toISOString(),
+      _pending: true,
+    });
+
+    const fd = new FormData();
+    fd.append("pdf", file, file.name || "document.pdf");
+    fd.append("latitude", String(pos.lat));
+    fd.append("longitude", String(pos.lng));
+    if (caption) fd.append("message", caption);
+    if (replySnapshot?.id) fd.append("reply_to", replySnapshot.id);
+
+    const res = await fetch(`/api/bubbles/${bubbleId}/messages/pdf/`, {
+      ...API_FETCH,
+      method: "POST",
+      body: fd,
+    });
+
+    removeMessageById(pendingId);
+    pendingId = null;
+
+    if (!res.ok) {
+      let detail = "Could not upload PDF.";
+      try {
+        const err = await res.json();
+        if (err.detail) detail = err.detail;
+      } catch {
+        /* ignore */
+      }
+      setComposerHint(detail, { kind: "cooldown" });
+      return;
+    }
+
+    const msg = await res.json();
+    appendMessage(msg);
+    if ($("#chat-input")) $("#chat-input").value = "";
+    clearReply();
+    startSendCooldown();
+    setComposerHint("", { kind: "muted" });
+  } catch (err) {
+    if (pendingId) removeMessageById(pendingId);
+    setComposerHint(err.message || "Could not upload PDF.", { kind: "cooldown" });
+  } finally {
+    refreshComposerAvailability();
+  }
+}
+
 async function uploadChatImage(file) {
   if (!bubbleId) return;
   if (!bubbleActive) {
@@ -1108,6 +1240,7 @@ function openMediaPicker(inputEl) {
 function setupMediaUpload() {
   const galleryInput = $("#image-gallery-input");
   const cameraInput = $("#image-camera-input");
+  const pdfInput = $("#pdf-upload-input");
 
   $("#btn-image-gallery")?.addEventListener("click", () => {
     openMediaPicker(galleryInput);
@@ -1117,6 +1250,10 @@ function setupMediaUpload() {
     openMediaPicker(cameraInput);
   });
 
+  $("#btn-pdf-upload")?.addEventListener("click", () => {
+    openMediaPicker(pdfInput);
+  });
+
   const onPick = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -1124,8 +1261,16 @@ function setupMediaUpload() {
     await uploadChatImage(file);
   };
 
+  const onPdfPick = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    await uploadChatPdf(file);
+  };
+
   galleryInput?.addEventListener("change", onPick);
   cameraInput?.addEventListener("change", onPick);
+  pdfInput?.addEventListener("change", onPdfPick);
 }
 
 function getComposerInput() {

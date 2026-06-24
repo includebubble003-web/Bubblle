@@ -20,7 +20,9 @@ from .serializers import (
     MessageCreateSerializer,
     MessageImageUploadSerializer,
     MessageOutSerializer,
+    MessagePdfUploadSerializer,
 )
+from .file_utils import chat_pdf_upload_path, validate_chat_pdf
 from .image_utils import chat_image_upload_path, optimize_chat_image
 from .similarity import is_similar_enough, similar_bubble_score
 from .services import (
@@ -346,6 +348,92 @@ def bubble_message_image(request, bubble_id: UUID):
         image_height=height,
     )
     msg.image.save(chat_image_upload_path(bubble.id), optimized, save=False)
+    msg.save()
+    msg = Message.objects.select_related("reply_to").get(pk=msg.pk)
+
+    broadcast_message(bubble.id, msg)
+
+    return Response(
+        MessageOutSerializer(msg, context={"request": request}).data,
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["GET"])
+@ratelimit(key="ip", rate="240/m", method="GET")
+def message_pdf_file(request, message_id: UUID):
+    """Serve a chat PDF through the API (reliable behind Docker/nginx)."""
+    try:
+        msg = Message.objects.get(id=message_id)
+    except Message.DoesNotExist:
+        return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if not msg.pdf or not msg.pdf.name:
+        return Response({"detail": "No PDF."}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        pdf_file = msg.pdf.open("rb")
+    except OSError:
+        return Response({"detail": "PDF file missing."}, status=status.HTTP_404_NOT_FOUND)
+
+    filename = msg.pdf_name or "document.pdf"
+    response = FileResponse(pdf_file, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="{filename}"'
+    response["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
+
+
+@api_view(["POST"])
+@ratelimit(key="ip", rate="20/m", method="POST")
+def bubble_message_pdf(request, bubble_id: UUID):
+    """Upload a PDF attachment to a community chat."""
+    session = _anonymous_session_for_request(request)
+    if not session:
+        return Response({"detail": "Missing anonymous session cookie."}, status=status.HTTP_401_UNAUTHORIZED)
+
+    try:
+        bubble = Bubble.objects.get(id=bubble_id)
+    except Bubble.DoesNotExist:
+        return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if not bubble.is_joinable():
+        return Response({"detail": "Bubble is not active."}, status=status.HTTP_410_GONE)
+
+    ser = MessagePdfUploadSerializer(data=request.data)
+    ser.is_valid(raise_exception=True)
+
+    lat = ser.validated_data["latitude"]
+    lng = ser.validated_data["longitude"]
+    caption = (ser.validated_data.get("message") or "").strip()
+    reply_to_id = ser.validated_data.get("reply_to")
+    parent = get_reply_parent(bubble.id, reply_to_id) if reply_to_id else None
+    if reply_to_id and not parent:
+        return Response({"detail": "Reply target not found."}, status=status.HTTP_400_BAD_REQUEST)
+
+    dist = haversine_distance_m(lat, lng, bubble.latitude, bubble.longitude)
+    if dist > bubble.radius:
+        return Response({"detail": "Outside bubble radius."}, status=status.HTTP_403_FORBIDDEN)
+
+    throttle_key = f"bbl:pdfthrottle:{bubble.id}:{session.session_uuid}"
+    if not throttle_allow(throttle_key, 5):
+        return Response({"detail": "Slow down."}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+    try:
+        content, display_name, size = validate_chat_pdf(ser.validated_data["pdf"])
+    except ValueError as e:
+        return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    settings.MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
+
+    msg = Message(
+        bubble=bubble,
+        anonymous_name=session.anonymous_name,
+        message=caption,
+        reply_to=parent,
+        pdf_name=display_name,
+        pdf_size=size,
+    )
+    msg.pdf.save(chat_pdf_upload_path(bubble.id), content, save=False)
     msg.save()
     msg = Message.objects.select_related("reply_to").get(pk=msg.pk)
 

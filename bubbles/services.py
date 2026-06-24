@@ -69,6 +69,16 @@ def message_image_url(msg: Message) -> str | None:
     return public_media_url(message_image_api_path(msg))
 
 
+def message_pdf_api_path(msg: Message) -> str | None:
+    if not msg.pdf or not msg.pdf.name:
+        return None
+    return f"/api/bubbles/messages/{msg.id}/pdf/"
+
+
+def message_pdf_url(msg: Message) -> str | None:
+    return public_media_url(message_pdf_api_path(msg))
+
+
 def get_reply_parent(bubble_id: UUID, reply_to_id: UUID | None) -> Message | None:
     """Resolve a reply target; must belong to the same bubble."""
     if not reply_to_id:
@@ -91,17 +101,32 @@ def serialize_message(msg: Message) -> dict:
             payload["image_width"] = msg.image_width
         if msg.image_height:
             payload["image_height"] = msg.image_height
+    pdf_url = message_pdf_url(msg)
+    if pdf_url:
+        payload["pdf_url"] = pdf_url
+        if msg.pdf_name:
+            payload["pdf_name"] = msg.pdf_name
+        if msg.pdf_size:
+            payload["pdf_size"] = msg.pdf_size
     parent = getattr(msg, "reply_to", None)
     if msg.reply_to_id and parent:
         reply_preview = parent.message or ""
         if not reply_preview and parent.image:
             reply_preview = "📷 Photo"
-        payload["reply_to"] = {
+        elif not reply_preview and parent.pdf:
+            reply_preview = "📄 PDF"
+        reply_payload = {
             "id": str(parent.id),
             "anonymous_name": parent.anonymous_name,
             "message": reply_preview,
             "image_url": message_image_url(parent),
         }
+        parent_pdf_url = message_pdf_url(parent)
+        if parent_pdf_url:
+            reply_payload["pdf_url"] = parent_pdf_url
+            if parent.pdf_name:
+                reply_payload["pdf_name"] = parent.pdf_name
+        payload["reply_to"] = reply_payload
     return payload
 
 
