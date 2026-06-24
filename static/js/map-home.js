@@ -998,7 +998,7 @@ function renderStandardFeedSections(bubbles, questions) {
     if (totalActive > 0) {
       countEl.textContent = `${totalActive} active people nearby`;
     } else if (nearbyCommunities.length) {
-      countEl.textContent = `${nearbyCommunities.length} communit${nearbyCommunities.length === 1 ? "y" : "ies"} nearby`;
+      countEl.textContent = `${nearbyCommunities.length} group${nearbyCommunities.length === 1 ? "" : "s"} nearby`;
     } else {
       countEl.textContent = "";
     }

@@ -54,7 +54,7 @@
         <div id="interest-onboarding" class="onboarding onboarding--overlay interest-onboarding" hidden role="dialog" aria-labelledby="interest-title">
           <div class="onboarding-card interest-card">
             <h2 class="interest-title" id="interest-title">What are you interested in?</h2>
-            <p class="interest-sub">Pick up to 5 topics — we'll recommend communities nearby</p>
+            <p class="interest-sub">Pick up to 5 topics — we'll recommend Find Your People nearby</p>
             <div class="interest-grid" id="interest-grid" role="group" aria-label="Interests"></div>
             <p class="interest-count" id="interest-count" aria-live="polite">0 / 5 selected</p>
             <button type="button" class="btn-onboarding" id="btn-interests-continue" disabled>Continue</button>
@@ -79,7 +79,7 @@
             <div class="feed-search-sticky" id="feed-search-wrap">
               <div class="home-hero" id="home-hero">
                 <h1 class="home-hero-title">Find people around you who share your interests.</h1>
-                <p class="home-hero-sub">Join communities, ask questions, and discover local conversations.</p>
+                <p class="home-hero-sub">Find your people, ask locals, and discover conversations nearby.</p>
               </div>
 
               <p class="feed-live-strip" id="feed-live-strip">
@@ -97,7 +97,7 @@
                     type="search"
                     id="feed-search"
                     class="feed-search-input"
-                    placeholder="Search communities & questions…"
+                    placeholder="Search Find Your People & Ask Locals…"
                     autocomplete="off"
                     enterkeyhint="search"
                     autocapitalize="off"
@@ -111,10 +111,10 @@
                 <div class="feed-tabs" role="tablist" aria-label="Discover content">
                   <button type="button" class="feed-tab" role="tab" id="feed-tab-btn-for-you" data-feed-tab="for-you" aria-selected="false" aria-controls="feed-panel-for-you">For You</button>
                   <button type="button" class="feed-tab" role="tab" id="feed-tab-btn-questions" data-feed-tab="questions" aria-selected="false" aria-controls="feed-panel-questions">
-                    Questions<span class="feed-tab-count" id="feed-tab-count-questions" hidden></span>
+                    Ask Locals<span class="feed-tab-count" id="feed-tab-count-questions" hidden></span>
                   </button>
                   <button type="button" class="feed-tab is-active" role="tab" id="feed-tab-btn-communities" data-feed-tab="communities" aria-selected="true" aria-controls="feed-panel-communities">
-                    Communities<span class="feed-tab-count" id="feed-tab-count-communities" hidden></span>
+                    Find Your People<span class="feed-tab-count" id="feed-tab-count-communities" hidden></span>
                   </button>
                   <button type="button" class="feed-tab" role="tab" id="feed-tab-btn-map" data-feed-tab="map" aria-selected="false" aria-controls="feed-panel-map">Map</button>
                 </div>
@@ -127,13 +127,13 @@
                     <path d="M9.5 9a2.5 2.5 0 1 1 4.2 1.8c-.9.7-1.2 1.3-1.2 2.2"/>
                     <circle cx="12" cy="17" r="0.75" fill="currentColor"/>
                   </svg>
-                  Ask a Question
+                  Ask Locals
                 </button>
                 <button type="button" class="feed-tab-action-btn feed-tab-action-btn--create" id="feed-tab-action-create" hidden>
                   <svg class="home-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
                     <path d="M12 5v14M5 12h14"/>
                   </svg>
-                  Create Community
+                  Start a Group
                 </button>
               </div>
             </div>
@@ -153,12 +153,12 @@
               </section>
 
               <div class="feed-search-hint" id="feed-search-hint" hidden>
-                <p>Find communities and questions — try "coffee", "gym", or "react"</p>
+                <p>Find your people and ask locals — try "coffee", "gym", or "react"</p>
               </div>
 
               <section class="feed-section" id="feed-search-questions-section" hidden>
                 <div class="feed-section-head">
-                  <h2 class="feed-section-title">Questions</h2>
+                  <h2 class="feed-section-title">Ask Locals</h2>
                   <span class="feed-section-sub" id="feed-search-questions-count"></span>
                 </div>
                 <div class="feed-card-list" id="feed-search-questions"></div>
@@ -166,7 +166,7 @@
 
               <section class="feed-section" id="feed-search-communities-section" hidden>
                 <div class="feed-section-head">
-                  <h2 class="feed-section-title">Communities</h2>
+                  <h2 class="feed-section-title">Find Your People</h2>
                   <span class="feed-section-sub" id="feed-search-communities-count"></span>
                 </div>
                 <div class="feed-card-list" id="feed-search-communities"></div>
@@ -188,10 +188,10 @@
                   </svg>
                 </div>
                 <p class="feed-search-empty-title">No results found</p>
-                <p class="feed-search-empty-lead">Try another keyword, ask a question, or create a community.</p>
+                <p class="feed-search-empty-lead">Try another keyword, ask locals, or start a group.</p>
                 <div class="feed-search-empty-actions">
-                  <button type="button" class="feed-search-empty-create" id="feed-search-empty-ask">Ask a question</button>
-                  <button type="button" class="feed-search-empty-create feed-search-empty-create--secondary" id="feed-search-empty-create">Create community</button>
+                  <button type="button" class="feed-search-empty-create" id="feed-search-empty-ask">Ask locals</button>
+                  <button type="button" class="feed-search-empty-create feed-search-empty-create--secondary" id="feed-search-empty-create">Start a group</button>
                 </div>
               </div>
 
@@ -215,28 +215,28 @@
 
                   <div class="feed-tab-empty" id="feed-tab-empty-for-you" hidden>
                     <p class="feed-tab-empty-title">Nothing to recommend yet</p>
-                    <p class="feed-tab-empty-lead">Set your interests or explore Communities and Questions tabs.</p>
+                    <p class="feed-tab-empty-lead">Set your interests or explore Find Your People and Ask Locals.</p>
                   </div>
                 </div>
 
                 <div class="feed-tab-panel" id="feed-panel-questions" data-feed-tab-panel="questions" role="tabpanel" aria-labelledby="feed-tab-btn-questions" hidden>
                   <section class="feed-section feed-section--questions" id="feed-questions-section" hidden>
                     <div class="feed-section-head">
-                      <h2 class="feed-section-title">🔥 Questions Around You</h2>
+                      <h2 class="feed-section-title">🔥 Ask Locals Near You</h2>
                       <span class="feed-section-sub">Recent discussions nearby</span>
                     </div>
                     <div class="feed-card-list" id="feed-questions"></div>
                   </section>
                   <div class="feed-tab-empty" id="feed-tab-empty-questions" hidden>
-                    <p class="feed-tab-empty-title">No questions nearby yet</p>
-                    <p class="feed-tab-empty-lead">Be the first to ask something — tap Ask a Question above.</p>
+                    <p class="feed-tab-empty-title">Nothing to ask locals yet</p>
+                    <p class="feed-tab-empty-lead">Be the first — tap Ask Locals above.</p>
                   </div>
                 </div>
 
                 <div class="feed-tab-panel is-active" id="feed-panel-communities" data-feed-tab-panel="communities" role="tabpanel" aria-labelledby="feed-tab-btn-communities">
                   <section class="feed-section" id="feed-nearby-section" hidden>
                     <div class="feed-section-head">
-                      <h2 class="feed-section-title">Communities Near You</h2>
+                      <h2 class="feed-section-title">Find Your People Near You</h2>
                       <span class="feed-section-sub" id="feed-nearby-count"></span>
                     </div>
                     <div class="feed-card-list" id="feed-nearby"></div>
@@ -253,14 +253,14 @@
                   <section class="feed-section" id="feed-recent-section" hidden>
                     <div class="feed-section-head">
                       <h2 class="feed-section-title">Recently Active</h2>
-                      <span class="feed-section-sub">Active communities</span>
+                      <span class="feed-section-sub">Active nearby</span>
                     </div>
                     <div class="feed-card-list" id="feed-recent"></div>
                   </section>
 
                   <div class="feed-tab-empty" id="feed-tab-empty-communities" hidden>
-                    <p class="feed-tab-empty-title">No communities nearby yet</p>
-                    <p class="feed-tab-empty-lead">Tap Create Community above to start one.</p>
+                    <p class="feed-tab-empty-title">No groups nearby yet</p>
+                    <p class="feed-tab-empty-lead">Tap Start a Group above to create one.</p>
                   </div>
                 </div>
 
@@ -278,14 +278,14 @@
 
                     <section class="feed-section feed-section--map-list" id="feed-map-communities-section" hidden>
                       <div class="feed-section-head">
-                        <h2 class="feed-section-title">Communities on map</h2>
+                        <h2 class="feed-section-title">Find Your People on map</h2>
                       </div>
                       <div class="feed-card-list" id="feed-map-communities"></div>
                     </section>
 
                     <section class="feed-section feed-section--map-list" id="feed-map-questions-section" hidden>
                       <div class="feed-section-head">
-                        <h2 class="feed-section-title">Questions on map</h2>
+                        <h2 class="feed-section-title">Ask Locals on map</h2>
                       </div>
                       <div class="feed-card-list" id="feed-map-questions"></div>
                     </section>
@@ -298,8 +298,8 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>
                 </div>
                 <p class="home-empty-title">No conversations nearby yet</p>
-                <p class="home-empty-lead">Ask a question or start the first community around you.</p>
-                <button type="button" class="home-empty-create" id="home-empty-create">Create community</button>
+                <p class="home-empty-lead">Ask locals or start the first group around you.</p>
+                <button type="button" class="home-empty-create" id="home-empty-create">Start a group</button>
               </div>
 
               <footer class="home-legal-footer">
@@ -316,11 +316,11 @@
 
     <div id="sheet-backdrop" class="sheet-backdrop" hidden></div>
 
-    <div id="ask-question-sheet" class="bottom-sheet" hidden role="dialog" aria-label="Ask a question">
+    <div id="ask-question-sheet" class="bottom-sheet" hidden role="dialog" aria-label="Ask locals">
       <div class="sheet-handle" aria-hidden="true"></div>
       <div class="sheet-header">
         <div>
-          <h2 class="sheet-title">Ask a question</h2>
+          <h2 class="sheet-title">Ask locals</h2>
           <p class="sheet-sub">Get answers from people nearby — anonymously</p>
         </div>
         <button type="button" class="sheet-close btn-icon-only" id="ask-question-close" aria-label="Close">
@@ -355,7 +355,7 @@
         <input id="create-bubble-title" name="title" maxlength="120" required placeholder="Bubble name…" autocomplete="off" aria-describedby="create-similar-section" />
         <div id="create-similar-section" class="create-similar-section" hidden>
           <div class="create-similar-head">
-            <h3 class="create-similar-title">Similar communities</h3>
+            <h3 class="create-similar-title">Similar groups</h3>
             <p class="create-similar-sub">Join an active bubble instead of starting a duplicate</p>
           </div>
           <ul id="create-similar-list" class="create-similar-list" aria-live="polite"></ul>
