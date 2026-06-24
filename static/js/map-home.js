@@ -593,8 +593,8 @@ function syncQuestionSection(container, items) {
   });
 }
 
-function renderQuestionFeedSection(questions, limit = 8) {
-  const items = questions.slice(0, limit);
+function renderQuestionFeedSection(questions, limit = null) {
+  const items = limit == null ? questions : questions.slice(0, limit);
   renderFeedSection("#feed-questions-section", "#feed-questions", items, {
     isQuestions: true,
   });
@@ -1021,7 +1021,7 @@ function renderStandardFeedSections(bubbles, questions) {
   renderFeedSection("#feed-discover-section", "#feed-discover", discover, {
     allBubbles: bubbles,
   });
-  renderQuestionFeedSection(questions, 8);
+  renderQuestionFeedSection(questions);
   renderMapTabDiscover(bubbles, questions);
   updateFeedTabCounts(questions, bubbles);
   updateFeedTabEmptyStates();
