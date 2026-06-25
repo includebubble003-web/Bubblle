@@ -1,6 +1,7 @@
 /**
  * Local Q&A helpers — question cards, formatting, search matching.
  */
+import { topicIcon } from "./topic-icons.js";
 
 export function questionHref(id) {
   return `/question/${id}/`;
@@ -115,6 +116,7 @@ export function questionCardMeta(question) {
 
 export function questionCardHtml(q, { escapeHtml }) {
   const meta = questionCardMeta(q);
+  const icon = topicIcon(q.title, { kind: "question" });
   const community = q.bubble_title
     ? `<span class="question-card-community">${escapeHtml(q.bubble_title)}</span>`
     : "";
@@ -123,6 +125,7 @@ export function questionCardHtml(q, { escapeHtml }) {
 
   return `<article class="question-card" data-question-id="${escapeHtml(q.id)}" tabindex="0" role="link">
     <div class="question-card-accent" aria-hidden="true"></div>
+    <div class="question-card-icon" aria-hidden="true">${icon}</div>
     <div class="question-card-body">
       <h3 class="question-card-title">${escapeHtml(q.title || "Question")}</h3>
       ${community}

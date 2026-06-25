@@ -11,6 +11,7 @@ import {
   fmtTimeAgoLong,
   questionHref,
 } from "./questions.js";
+import { topicIcon } from "./topic-icons.js";
 
 const API_FETCH = { credentials: "include", cache: "no-store" };
 const MOBILE_ANSWER_MQ = "(max-width: 900px)";
@@ -75,7 +76,10 @@ function replyHtml(reply) {
 
 function renderQuestionHeader(q) {
   const titleBlock = $("#question-page-title");
-  if (titleBlock) titleBlock.textContent = q.title || "Question";
+  if (titleBlock) {
+    const title = q.title || "Question";
+    titleBlock.textContent = `${topicIcon(title, { kind: "question" })} ${title}`;
+  }
 
   const descBlock = $("#question-page-description");
   if (descBlock) {

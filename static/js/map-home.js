@@ -30,6 +30,7 @@ import {
   questionFingerprint,
   questionHref,
 } from "./questions.js";
+import { topicIcon } from "./topic-icons.js";
 
 let map = null;
 let userMarker = null;
@@ -436,7 +437,10 @@ function bubbleCardHtml(b, { compact = false, recommended = false } = {}) {
     ? `<a href="${bubbleHref(b.id)}" class="bubble-card-join bubble-card-join--sm">Join</a>`
     : `<a href="${bubbleHref(b.id)}" class="bubble-card-join">Join</a>`;
 
+  const icon = topicIcon(b.title, { kind: "community" });
+
   return `<article class="${cls}" data-bubble-id="${escapeHtml(b.id)}" tabindex="0" role="button" aria-label="${escapeHtml(b.title || "Community")}">
+    <div class="bubble-card-icon" aria-hidden="true">${icon}</div>
     <div class="bubble-card-body">
       <h3 class="bubble-card-title">${escapeHtml(b.title || "Community")}</h3>
       ${bubbleCardDetailsHtml(b)}
@@ -514,6 +518,9 @@ function applyBubbleCardState(el, b, { compact = false, recommended = false } = 
 
   const titleEl = el.querySelector(".bubble-card-title");
   if (titleEl) titleEl.textContent = b.title || "Community";
+
+  const iconEl = el.querySelector(".bubble-card-icon");
+  if (iconEl) iconEl.textContent = topicIcon(b.title, { kind: "community" });
 
   const detailsEl = el.querySelector(".bubble-card-details");
   if (detailsEl) {
