@@ -123,9 +123,27 @@ function isTrending(b, all) {
   return count >= max && count >= 2;
 }
 
+function bindEntityMarkerClick(marker, key) {
+  marker.off("click");
+  marker.on("click", (e) => {
+    L.DomEvent.stopPropagation(e);
+    if (e.originalEvent) {
+      L.DomEvent.stopPropagation(e.originalEvent);
+    }
+    mapClickIgnoreUntil = Date.now() + 400;
+    const ent = entityByKey.get(key);
+    if (ent) {
+      openMapPreview(ent);
+    }
+  });
+}
+
+/** Ignore map background clicks right after a marker tap (Leaflet event bubbling). */
+let mapClickIgnoreUntil = 0;
+
 function hideMapPreviewPanel() {
   const preview = $("#map-marker-preview");
-  if (preview) preview.hidden = true;
+  if (preview) preview.setAttribute("hidden", "");
 }
 
 function closeMapPreview() {
@@ -140,6 +158,7 @@ function closeMapPreview() {
 
 function openMapPreview(entity) {
   if (!entity) return;
+  mapClickIgnoreUntil = Date.now() + 400;
   selectedMapEntityKey = mapEntityKey(entity);
 
   if (entity.type === "community") {
@@ -154,10 +173,15 @@ function openMapPreview(entity) {
     });
   }
 
-  const inner = $("#map-marker-preview-inner");
-  if (inner) inner.innerHTML = mapPreviewHtml(entity, { escapeHtml });
   const preview = $("#map-marker-preview");
-  if (preview) preview.hidden = false;
+  const inner = $("#map-marker-preview-inner");
+  if (!preview || !inner) {
+    window.location.href = entity.href;
+    return;
+  }
+
+  inner.innerHTML = mapPreviewHtml(entity, { escapeHtml });
+  preview.removeAttribute("hidden");
 
   refreshMapMarkerIcons();
 
@@ -176,6 +200,8 @@ function makeMapPinIcon(entity, { selected = false } = {}) {
     html: mapPinHtml(entity, { selected, escapeHtml }),
     iconSize: [MAP_PIN_SIZE, MAP_PIN_SIZE],
     iconAnchor: [MAP_PIN_SIZE / 2, MAP_PIN_SIZE / 2],
+    popupAnchor: [0, -MAP_PIN_SIZE / 2],
+    interactive: true,
   });
 }
 
@@ -222,6 +248,8 @@ function syncMapEntities(bubbles, questions) {
     if (marker) {
       marker.setLatLng(latlng);
       marker.setZIndexOffset(zIndex);
+      marker.options.bubblingMouseEvents = false;
+      bindEntityMarkerClick(marker, key);
       if (entityMarkerStateById.get(key) !== fp) {
         marker.setIcon(makeMapPinIcon(entity, { selected }));
         entityMarkerStateById.set(key, fp);
@@ -230,12 +258,10 @@ function syncMapEntities(bubbles, questions) {
       marker = L.marker(latlng, {
         icon: makeMapPinIcon(entity, { selected }),
         zIndexOffset: zIndex,
+        bubblingMouseEvents: false,
+        interactive: true,
       });
-      marker.on("click", (e) => {
-        L.DomEvent.stopPropagation(e);
-        const ent = entityByKey.get(key);
-        if (ent) openMapPreview(ent);
-      });
+      bindEntityMarkerClick(marker, key);
       marker.addTo(markersLayer);
       entityMarkerByKey.set(key, marker);
       entityMarkerStateById.set(key, fp);
@@ -319,7 +345,10 @@ function ensureMap() {
   userMarker._ring = youRing;
 
   map.on("moveend", scheduleDiscoveryRefresh);
-  map.on("click", () => closeMapPreview());
+  map.on("click", () => {
+    if (Date.now() < mapClickIgnoreUntil) return;
+    closeMapPreview();
+  });
 
   invalidateMapSoon();
   return map;
@@ -1422,6 +1451,12 @@ function setupMapUi() {
   });
 
   $("#map-marker-preview")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+  });
+
+  $("#map-marker-preview-inner")?.addEventListener("click", (e) => {
+    const action = e.target.closest(".map-preview-action");
+    if (action?.href) return;
     e.stopPropagation();
   });
 

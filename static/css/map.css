@@ -210,6 +210,8 @@
   width: 100%;
   height: 100%;
   background: var(--bg-app);
+  position: relative;
+  z-index: 1;
 }
 
 .home-map-wrap .leaflet-container {
@@ -259,6 +261,7 @@
 .home-map-wrap {
   position: relative;
   border-radius: 16px;
+  isolation: isolate;
 }
 
 .map-tab-map-wrap {
@@ -1293,6 +1296,7 @@
 .map-pin-wrap {
   background: transparent !important;
   border: none !important;
+  pointer-events: auto !important;
 }
 
 .map-pin {
@@ -1370,13 +1374,14 @@
   left: 12px;
   right: 12px;
   bottom: 12px;
-  z-index: 25;
+  z-index: 1000;
   padding: 14px 14px 12px;
   border-radius: var(--radius-card);
   background: rgba(24, 28, 35, 0.96);
   border: 1px solid var(--border-strong);
   box-shadow: var(--shadow-lg);
   backdrop-filter: blur(20px);
+  pointer-events: auto;
   animation: map-preview-in 0.22s var(--ease);
 }
 
