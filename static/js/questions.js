@@ -1,7 +1,6 @@
 /**
  * Local Q&A helpers — question cards, formatting, search matching.
  */
-import { topicIcon } from "./topic-icons.js";
 
 export function questionHref(id) {
   return `/question/${id}/`;
@@ -115,28 +114,27 @@ export function questionCardMeta(question) {
 }
 
 export function questionCardHtml(q, { escapeHtml }) {
-  const meta = questionCardMeta(q);
-  const icon = topicIcon(q.title, { kind: "question" });
-  const community = q.bubble_title
-    ? `<span class="question-card-community">${escapeHtml(q.bubble_title)}</span>`
-    : "";
   const replies = Number(q.reply_count) || 0;
-  const metaTail = meta.split(" · ").slice(1).join(" · ");
+  const answerLabel = `${replies} ${replies === 1 ? "Answer" : "Answers"}`;
+  const dist = fmtQuestionDistance(q.distance_m);
+  const activity = fmtQuestionActivity(q.last_activity_at);
+  const timeLabel =
+    activity && activity !== "Active now" ? `Asked ${activity.toLowerCase()}` : "Asked recently";
+  const community = q.bubble_title
+    ? `<span class="question-card-tag">${escapeHtml(q.bubble_title)}</span>`
+    : "";
 
   return `<article class="question-card" data-question-id="${escapeHtml(q.id)}" tabindex="0" role="link">
-    <div class="question-card-accent" aria-hidden="true"></div>
-    <div class="question-card-icon" aria-hidden="true">${icon}</div>
+    <div class="question-card-qmark" aria-hidden="true">?</div>
     <div class="question-card-body">
       <h3 class="question-card-title">${escapeHtml(q.title || "Question")}</h3>
       ${community}
-      <div class="question-card-foot">
-        <span class="question-card-stat question-card-stat--answers">${replies} repl${replies === 1 ? "y" : "ies"}</span>
-        ${metaTail ? `<span class="question-card-stat">${escapeHtml(metaTail)}</span>` : ""}
+      <div class="question-card-meta-row">
+        <span class="question-card-stat question-card-stat--answers">${escapeHtml(answerLabel)}</span>
+        ${dist ? `<span class="question-card-stat">${escapeHtml(dist)}</span>` : ""}
       </div>
+      <p class="question-card-time">${escapeHtml(timeLabel)}</p>
     </div>
-    <span class="question-card-chevron" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-    </span>
   </article>`;
 }
 

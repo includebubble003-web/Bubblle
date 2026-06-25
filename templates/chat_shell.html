@@ -4,10 +4,11 @@
 {% block extra_css %}
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <link rel="stylesheet" href="{% static_v 'css/chat.css' %}" />
 <link rel="stylesheet" href="{% static_v 'css/map.css' %}" />
+<link rel="stylesheet" href="{% static_v 'css/bubblle-ref.css' %}" />
 {% endblock %}
 {% block body_class %}chat-body{% endblock %}
 {% block body %}
@@ -30,22 +31,22 @@
     <!-- Conversation-first landing (home) -->
     <section class="home-screen" id="map-screen" {% if question_id or bubble_id %}hidden{% endif %} aria-label="Nearby conversations">
       <header class="home-header">
-        <a href="/" class="brand home-brand">
-          <span class="brand-mark" aria-hidden="true">
-            <svg class="icon icon-brand" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.75" opacity="0.5"/><circle cx="12" cy="12" r="5.5" fill="currentColor" opacity="0.95"/></svg>
-          </span>
-          <span class="brand-name">Bubblle</span>
-        </a>
-        <div class="live-nearby-badge" id="map-live-count" data-state="idle">
-          <span class="live-nearby-dot" aria-hidden="true"></span>
-          <span class="live-nearby-text">Discover nearby</span>
-        </div>
-        <div class="home-identity">
-          <div class="identity" id="identity-map">
-            <span class="identity-avatar" aria-hidden="true">
-              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-            </span>
-            <input id="display-name-map" class="identity-input" maxlength="64" autocomplete="nickname" placeholder="Your name" aria-label="Display name" />
+        <button type="button" class="home-location" id="home-location-btn" aria-label="Your area">
+          <svg class="home-location-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s7-4.35 7-11a7 7 0 1 0-14 0c0 6.65 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+          <span class="home-location-label" id="home-location-label">Nearby</span>
+          <svg class="home-location-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="home-header-actions">
+          <button type="button" class="btn-icon home-map-btn" id="btn-open-map" aria-label="Open map" title="Map">
+            <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2V6z"/><path d="M9 4v14M15 6v14"/></svg>
+          </button>
+          <div class="home-identity">
+            <div class="identity" id="identity-map">
+              <span class="identity-avatar" aria-hidden="true">
+                <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+              </span>
+              <input id="display-name-map" class="identity-input" maxlength="64" autocomplete="nickname" placeholder="You" aria-label="Display name" />
+            </div>
           </div>
         </div>
       </header>
@@ -77,16 +78,6 @@
         <div class="home-feed-pane" id="home-feed-scroll">
           <div class="home-feed-panel">
             <div class="feed-search-sticky" id="feed-search-wrap">
-              <div class="home-hero" id="home-hero">
-                <h1 class="home-hero-title">Find people around you who share your interests.</h1>
-                <p class="home-hero-sub">Find your people, ask locals, and discover conversations nearby.</p>
-              </div>
-
-              <p class="feed-live-strip" id="feed-live-strip">
-                <span class="feed-live-dot" aria-hidden="true"></span>
-                <span id="feed-live-text">Discover nearby</span>
-              </p>
-
               <div class="feed-search-row">
                 <label class="feed-search" for="feed-search">
                   <svg class="feed-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -97,7 +88,7 @@
                     type="search"
                     id="feed-search"
                     class="feed-search-input"
-                    placeholder="Search Find Your People & Ask Locals…"
+                    placeholder="Search communities & questions…"
                     autocomplete="off"
                     enterkeyhint="search"
                     autocapitalize="off"
@@ -109,14 +100,13 @@
 
               <div class="feed-tabs-wrap" id="feed-tabs-wrap" hidden>
                 <div class="feed-tabs" role="tablist" aria-label="Discover content">
-                  <button type="button" class="feed-tab" role="tab" id="feed-tab-btn-for-you" data-feed-tab="for-you" aria-selected="false" aria-controls="feed-panel-for-you">For You</button>
+                  <button type="button" class="feed-tab is-active" role="tab" id="feed-tab-btn-for-you" data-feed-tab="for-you" aria-selected="true" aria-controls="feed-panel-for-you">For You</button>
                   <button type="button" class="feed-tab" role="tab" id="feed-tab-btn-questions" data-feed-tab="questions" aria-selected="false" aria-controls="feed-panel-questions">
-                    Ask Locals<span class="feed-tab-count" id="feed-tab-count-questions" hidden></span>
+                    Questions<span class="feed-tab-count" id="feed-tab-count-questions" hidden></span>
                   </button>
-                  <button type="button" class="feed-tab is-active" role="tab" id="feed-tab-btn-communities" data-feed-tab="communities" aria-selected="true" aria-controls="feed-panel-communities">
-                    Find Your People<span class="feed-tab-count" id="feed-tab-count-communities" hidden></span>
+                  <button type="button" class="feed-tab" role="tab" id="feed-tab-btn-communities" data-feed-tab="communities" aria-selected="false" aria-controls="feed-panel-communities">
+                    Communities<span class="feed-tab-count" id="feed-tab-count-communities" hidden></span>
                   </button>
-                  <button type="button" class="feed-tab" role="tab" id="feed-tab-btn-map" data-feed-tab="map" aria-selected="false" aria-controls="feed-panel-map">Map</button>
                 </div>
               </div>
 
@@ -196,7 +186,7 @@
               </div>
 
               <div class="feed-tab-panels" id="feed-tab-panels" hidden>
-                <div class="feed-tab-panel" id="feed-panel-for-you" data-feed-tab-panel="for-you" role="tabpanel" aria-labelledby="feed-tab-btn-for-you" hidden>
+                <div class="feed-tab-panel is-active" id="feed-panel-for-you" data-feed-tab-panel="for-you" role="tabpanel" aria-labelledby="feed-tab-btn-for-you">
                   <section class="feed-section feed-section--recommended" id="feed-recommended-section" hidden>
                     <div class="feed-section-head">
                       <h2 class="feed-section-title">Recommended For You</h2>
@@ -233,7 +223,7 @@
                   </div>
                 </div>
 
-                <div class="feed-tab-panel is-active" id="feed-panel-communities" data-feed-tab-panel="communities" role="tabpanel" aria-labelledby="feed-tab-btn-communities">
+                <div class="feed-tab-panel" id="feed-panel-communities" data-feed-tab-panel="communities" role="tabpanel" aria-labelledby="feed-tab-btn-communities" hidden>
                   <section class="feed-section" id="feed-nearby-section" hidden>
                     <div class="feed-section-head">
                       <h2 class="feed-section-title">Find Your People Near You</h2>
@@ -264,37 +254,6 @@
                   </div>
                 </div>
 
-                <div class="feed-tab-panel feed-tab-panel--map" id="feed-panel-map" data-feed-tab-panel="map" role="tabpanel" aria-labelledby="feed-tab-btn-map" hidden>
-                  <div class="map-tab-view">
-                    <div class="map-tab-map-wrap home-map-wrap" id="home-map-wrap">
-                      <div id="map" class="map-container" role="application" aria-label="Map of nearby bubbles and questions"></div>
-                      <div class="map-loading" id="map-loading" hidden aria-live="polite">
-                        <div class="map-loading-shimmer" aria-hidden="true"></div>
-                      </div>
-                      <button type="button" class="map-recenter-btn" id="btn-map-recenter" hidden aria-label="Recenter on my location" title="My location">
-                        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
-                      </button>
-                      <aside class="map-marker-preview" id="map-marker-preview" hidden aria-live="polite">
-                        <button type="button" class="map-marker-preview-close" id="map-marker-preview-close" aria-label="Close preview">&times;</button>
-                        <div class="map-marker-preview-inner" id="map-marker-preview-inner"></div>
-                      </aside>
-                    </div>
-
-                    <section class="feed-section feed-section--map-list" id="feed-map-communities-section" hidden>
-                      <div class="feed-section-head">
-                        <h2 class="feed-section-title">Find Your People on map</h2>
-                      </div>
-                      <div class="feed-card-list" id="feed-map-communities"></div>
-                    </section>
-
-                    <section class="feed-section feed-section--map-list" id="feed-map-questions-section" hidden>
-                      <div class="feed-section-head">
-                        <h2 class="feed-section-title">Ask Locals on map</h2>
-                      </div>
-                      <div class="feed-card-list" id="feed-map-questions"></div>
-                    </section>
-                  </div>
-                </div>
               </div>
 
               <div class="home-empty" id="home-empty" hidden>
@@ -320,27 +279,81 @@
 
     <div id="sheet-backdrop" class="sheet-backdrop" hidden></div>
 
+    <div id="map-sheet" class="bottom-sheet bottom-sheet--map" hidden role="dialog" aria-label="Nearby map">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="sheet-header sheet-header--map">
+        <div>
+          <h2 class="sheet-title">Nearby map</h2>
+          <p class="sheet-sub">Tap a pin to preview</p>
+        </div>
+        <button type="button" class="sheet-close btn-icon-only" id="map-sheet-close" aria-label="Close map">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <div class="map-sheet-body">
+        <div class="map-tab-map-wrap home-map-wrap" id="home-map-wrap">
+          <div id="map" class="map-container" role="application" aria-label="Map of nearby bubbles and questions"></div>
+          <div class="map-loading" id="map-loading" hidden aria-live="polite">
+            <div class="map-loading-shimmer" aria-hidden="true"></div>
+          </div>
+          <button type="button" class="map-recenter-btn" id="btn-map-recenter" hidden aria-label="Recenter on my location" title="My location">
+            <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+          </button>
+          <aside class="map-marker-preview" id="map-marker-preview" hidden aria-live="polite">
+            <button type="button" class="map-marker-preview-close" id="map-marker-preview-close" aria-label="Close preview">&times;</button>
+            <div class="map-marker-preview-inner" id="map-marker-preview-inner"></div>
+          </aside>
+        </div>
+        <section class="feed-section feed-section--map-list" id="feed-map-communities-section" hidden>
+          <div class="feed-section-head">
+            <h2 class="feed-section-title">Communities nearby</h2>
+          </div>
+          <div class="feed-card-list" id="feed-map-communities"></div>
+        </section>
+        <section class="feed-section feed-section--map-list" id="feed-map-questions-section" hidden>
+          <div class="feed-section-head">
+            <h2 class="feed-section-title">Questions nearby</h2>
+          </div>
+          <div class="feed-card-list" id="feed-map-questions"></div>
+        </section>
+      </div>
+    </div>
+
+    <nav class="home-dock" id="home-dock" aria-label="Quick actions">
+      <button type="button" class="home-dock-btn" id="dock-map" aria-label="Open map">
+        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6 2-6 2V6z"/></svg>
+        <span>Map</span>
+      </button>
+      <button type="button" class="home-dock-btn home-dock-btn--primary" id="dock-ask" aria-label="Ask a question">
+        <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+      <button type="button" class="home-dock-btn" id="dock-create" aria-label="Start a group">
+        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Groups</span>
+      </button>
+    </nav>
+
     <div id="ask-question-sheet" class="bottom-sheet" hidden role="dialog" aria-label="Ask locals">
       <div class="sheet-handle" aria-hidden="true"></div>
       <div class="sheet-header">
         <div>
-          <h2 class="sheet-title">Ask locals</h2>
-          <p class="sheet-sub">Get answers from people nearby — anonymously</p>
+          <h2 class="sheet-title">Ask a question</h2>
+          <p class="sheet-sub">Real people. Real answers. From your community.</p>
         </div>
         <button type="button" class="sheet-close btn-icon-only" id="ask-question-close" aria-label="Close">
           <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
         </button>
       </div>
       <form id="ask-question-form" class="create-sheet-form">
-        <input id="ask-question-title" name="title" maxlength="200" required placeholder="What do you want to know?" autocomplete="off" />
-        <textarea id="ask-question-desc" name="description" maxlength="1000" rows="3" placeholder="Add details (optional)…"></textarea>
+        <input id="ask-question-title" name="title" maxlength="200" required placeholder="What do you want to know?" autocomplete="off" class="sheet-input sheet-input--large" />
+        <textarea id="ask-question-desc" name="description" maxlength="1000" rows="4" placeholder="Add more context (optional)…" class="sheet-input"></textarea>
         <label class="ask-question-label" for="ask-question-community">Link to a community (optional)</label>
         <select id="ask-question-community" class="ask-question-select" aria-label="Optional community">
           <option value="">No community — ask everyone nearby</option>
         </select>
         <p class="create-sheet-hint">Your question is visible to people within 5 km.</p>
         <p class="sheet-error" id="ask-question-error" hidden></p>
-        <button type="submit" class="btn-sheet-primary" id="ask-question-submit">Post question</button>
+        <button type="submit" class="btn-sheet-primary" id="ask-question-submit">Post Question</button>
       </form>
     </div>
 
@@ -593,7 +606,7 @@
 <script>
   window.__BUBBLE_ID__ = "{{ bubble_id|default:'' }}";
   window.__QUESTION_ID__ = "{{ question_id|default:'' }}";
-  window.__BUBBLLE_CLIENT_VERSION__ = "{{ BUBBLLE_CLIENT_VERSION|default:'7' }}";
+  window.__BUBBLLE_CLIENT_VERSION__ = "{{ BUBBLLE_CLIENT_VERSION|default:'8' }}";
 </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="{% static_v 'js/chat-app.js' %}" type="module"></script>

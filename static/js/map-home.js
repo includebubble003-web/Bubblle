@@ -90,19 +90,8 @@ function fmtActiveLabel(count) {
 
 function bubbleCardDetailsHtml(b) {
   const count = activeUsers(b);
-  const live = count > 0;
   const activeText = fmtActiveLabel(count);
-  const distText = fmtDistanceAway(b.distance_m);
-  return `<div class="bubble-card-details">
-    <span class="bubble-card-detail bubble-card-detail--active">
-      <span class="bubble-card-detail-icon" aria-hidden="true">${live ? "🟢" : "⚪"}</span>
-      ${escapeHtml(activeText)}
-    </span>
-    <span class="bubble-card-detail bubble-card-detail--distance">
-      <span class="bubble-card-detail-icon" aria-hidden="true">📍</span>
-      ${escapeHtml(distText)}
-    </span>
-  </div>`;
+  return `<p class="bubble-card-active">${escapeHtml(activeText)}</p>`;
 }
 
 
@@ -444,8 +433,8 @@ function bubbleCardHtml(b, { compact = false, recommended = false } = {}) {
     .join(" ");
 
   const joinBtn = compact
-    ? `<a href="${bubbleHref(b.id)}" class="bubble-card-join bubble-card-join--sm">Join</a>`
-    : `<a href="${bubbleHref(b.id)}" class="bubble-card-join">Join</a>`;
+    ? `<a href="${bubbleHref(b.id)}" class="bubble-card-join bubble-card-join--sm">Join →</a>`
+    : `<a href="${bubbleHref(b.id)}" class="bubble-card-join">Join →</a>`;
 
   const icon = topicIcon(b.title, { kind: "community" });
 
@@ -532,7 +521,7 @@ function applyBubbleCardState(el, b, { compact = false, recommended = false } = 
   const iconEl = el.querySelector(".bubble-card-icon");
   if (iconEl) iconEl.textContent = topicIcon(b.title, { kind: "community" });
 
-  const detailsEl = el.querySelector(".bubble-card-details");
+  const detailsEl = el.querySelector(".bubble-card-details, .bubble-card-active");
   if (detailsEl) {
     const wrap = document.createElement("div");
     wrap.innerHTML = bubbleCardDetailsHtml(b);
@@ -638,13 +627,13 @@ function renderFeedSection(sectionId, containerId, items, options = {}) {
 let feedSearchQuery = "";
 let feedSearchModeActive = false;
 
-const FEED_TABS = ["for-you", "questions", "communities", "map"];
+const FEED_TABS = ["for-you", "questions", "communities"];
 const FEED_TAB_SWIPE_THRESHOLD = 52;
 const FEED_TAB_SWIPE_MAX_VERTICAL = 48;
 const HERO_DISMISSED_KEY = "bbl_hero_dismissed";
 
-let activeFeedTab = "communities";
-const feedTabScrollPositions = { "for-you": 0, questions: 0, communities: 0, map: 0 };
+let activeFeedTab = "for-you";
+const feedTabScrollPositions = { "for-you": 0, questions: 0, communities: 0 };
 let feedTabSwipeStart = null;
 let heroDismissListener = null;
 
@@ -670,11 +659,15 @@ function applyFeedTabPanel(tab) {
   });
 
   updateFeedTabActions(tab);
+}
 
-  if (tab === "map") {
-    ensureMap();
-    invalidateMapSoon();
-  }
+function openMapSheet() {
+  ensureMap();
+  openSheet("#map-sheet");
+  invalidateMapSoon();
+  const bubbles = hooks.getNearbyBubbles?.() || [];
+  const questions = hooks.getNearbyQuestions?.() || [];
+  renderMapTabDiscover(bubbles, questions);
 }
 
 function updateFeedTabActions(tab) {
@@ -687,36 +680,9 @@ function updateFeedTabActions(tab) {
   createBtn?.toggleAttribute("hidden", tab !== "communities");
 }
 
-function dismissHero() {
-  const hero = $("#home-hero");
-  if (!hero || hero.hidden) return;
-  safeSetItem(HERO_DISMISSED_KEY, "1");
-  hero.classList.add("home-hero--collapsed");
-  window.setTimeout(() => {
-    hero.hidden = true;
-  }, 260);
-  if (heroDismissListener) {
-    $("#home-feed-scroll")?.removeEventListener("scroll", heroDismissListener);
-    heroDismissListener = null;
-  }
-}
+function dismissHero() {}
 
-function initHeroBehavior() {
-  const hero = $("#home-hero");
-  if (!hero) return;
-  if (safeGetItem(HERO_DISMISSED_KEY) === "1") {
-    hero.hidden = true;
-    hero.classList.add("home-hero--collapsed");
-    return;
-  }
-  hero.hidden = false;
-  hero.classList.remove("home-hero--collapsed");
-  if (heroDismissListener) return;
-  heroDismissListener = () => {
-    if (($("#home-feed-scroll")?.scrollTop ?? 0) > 8) dismissHero();
-  };
-  $("#home-feed-scroll")?.addEventListener("scroll", heroDismissListener, { passive: true });
-}
+function initHeroBehavior() {}
 
 function setFeedTab(tab, { restoreScroll = false, saveCurrent = true } = {}) {
   if (!FEED_TABS.includes(tab)) return;
@@ -782,8 +748,8 @@ function setupFeedTabGestures() {
   area.addEventListener(
     "touchstart",
     (e) => {
-      if (!feedTabsInteractive() || activeFeedTab === "map") return;
-      if (e.target.closest(".leaflet-container, .map-tab-map-wrap")) return;
+      if (!feedTabsInteractive()) return;
+      if (e.target.closest(".leaflet-container, .map-tab-map-wrap, .home-dock")) return;
       const t = e.changedTouches[0];
       feedTabSwipeStart = { x: t.clientX, y: t.clientY };
     },
@@ -793,8 +759,8 @@ function setupFeedTabGestures() {
   area.addEventListener(
     "touchend",
     (e) => {
-      if (!feedTabSwipeStart || !feedTabsInteractive() || activeFeedTab === "map") return;
-      if (e.target.closest(".leaflet-container, .map-tab-map-wrap")) return;
+      if (!feedTabSwipeStart || !feedTabsInteractive()) return;
+      if (e.target.closest(".leaflet-container, .map-tab-map-wrap, .home-dock")) return;
       const t = e.changedTouches[0];
       const dx = t.clientX - feedTabSwipeStart.x;
       const dy = t.clientY - feedTabSwipeStart.y;
@@ -1186,23 +1152,15 @@ function setFeedLoading(loading) {
 }
 
 function updateLiveBadge(bubbles) {
-  const el = $("#map-live-count");
-  const textEl = el?.querySelector(".live-nearby-text");
-  const feedLive = $("#feed-live-text");
-  const feedStrip = $("#feed-live-strip");
+  const label = $("#home-location-label");
   const total = bubbles.reduce((s, b) => s + activeUsers(b), 0);
-  let text = "Discover nearby";
-  let live = false;
+  let text = "Nearby";
   if (total > 0) {
-    text = `${total} ${total === 1 ? "local" : "locals"} active`;
-    live = true;
+    text = `${total} active nearby`;
   } else if (bubbles.length > 0) {
     text = `${bubbles.length} communit${bubbles.length === 1 ? "y" : "ies"} nearby`;
   }
-  if (textEl) textEl.textContent = text;
-  if (feedLive) feedLive.textContent = text;
-  if (el) el.dataset.state = live ? "live" : "idle";
-  feedStrip?.classList.toggle("feed-live-strip--live", live);
+  if (label) label.textContent = text;
 }
 
 function setMapLoading(loading) {
@@ -1254,6 +1212,7 @@ function openSheet(id) {
 function closeAllSheets() {
   $("#create-sheet")?.setAttribute("hidden", "hidden");
   $("#ask-question-sheet")?.setAttribute("hidden", "hidden");
+  $("#map-sheet")?.setAttribute("hidden", "hidden");
   $("#sheet-backdrop")?.setAttribute("hidden", "hidden");
   document.body.classList.remove("sheet-open");
   clearSimilarResults();
@@ -1443,6 +1402,27 @@ function setupMapUi() {
   $("#btn-map-recenter")?.addEventListener("click", (e) => {
     e.stopPropagation();
     recenterOnUser();
+  });
+
+  $("#btn-open-map")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openMapSheet();
+  });
+  $("#dock-map")?.addEventListener("click", () => openMapSheet());
+  $("#map-sheet-close")?.addEventListener("click", closeAllSheets);
+  $("#home-location-btn")?.addEventListener("click", () => openMapSheet());
+
+  $("#dock-ask")?.addEventListener("click", () => {
+    setFeedTab("questions", { restoreScroll: false });
+    openAskQuestionSheet();
+  });
+  $("#dock-create")?.addEventListener("click", () => {
+    setFeedTab("communities", { restoreScroll: false });
+    if (!hooks.hasPosition?.()) {
+      showOnboarding("Enable location to create a community where you are.");
+      return;
+    }
+    openCreateSheet();
   });
 
   $("#map-marker-preview-close")?.addEventListener("click", (e) => {

@@ -1032,10 +1032,10 @@
   margin: auto;
 }
 
-/* Message bubbles (WhatsApp-style) */
+/* Message bubbles — Threads / WhatsApp clean */
 .msg-bubble {
   display: flex;
-  margin-bottom: 3px;
+  margin-bottom: 12px;
   animation: msg-in 0.24s var(--ease) backwards;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -1046,24 +1046,123 @@
 }
 
 .msg-bubble-inner {
-  max-width: min(80%, 520px);
-  padding: 7px 11px 5px;
-  border-radius: 14px;
-  background: var(--theirs);
-  border: 1px solid var(--theirs-border);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
-  transition: filter 0.15s var(--ease);
+  max-width: min(85%, 520px);
+  padding: 12px 14px 10px;
+  border-radius: 18px;
+  border: none;
+  box-shadow: none;
 }
 
 .msg-bubble:not(.msg-bubble-mine) .msg-bubble-inner {
+  background: var(--bg-elevated);
   border-bottom-left-radius: 6px;
 }
 
 .msg-bubble-mine .msg-bubble-inner {
-  background: linear-gradient(145deg, #106b5c 0%, var(--mine) 100%);
-  border-color: var(--mine-border);
+  background: var(--accent);
+  border: none;
   border-bottom-right-radius: 6px;
-  color: var(--mine-text);
+  color: #fff;
+}
+
+.msg-author {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.msg-bubble-mine .msg-author {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.msg-text {
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.msg-time {
+  margin-top: 6px;
+  font-size: 0.6875rem;
+  opacity: 0.65;
+}
+
+.chat-messages {
+  padding: 16px 16px 8px;
+  gap: 0;
+}
+
+.chat-composer {
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  border-top: none;
+  background: var(--bg-app);
+  box-shadow: none;
+}
+
+.composer-input-row {
+  min-height: 48px;
+  padding: 6px 8px 6px 12px;
+  border-radius: 24px;
+  background: var(--bg-elevated);
+  border: none;
+}
+
+.composer-input-row:focus-within {
+  box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.25);
+}
+
+.chat-topbar {
+  border-bottom: none;
+  background: var(--bg-app);
+  padding: 12px 14px;
+  padding-top: max(12px, env(safe-area-inset-top));
+}
+
+.question-nav {
+  border-bottom: none;
+  background: var(--bg-app);
+}
+
+.question-composer {
+  border-top: none;
+  background: var(--bg-app);
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+}
+
+.question-reply-input {
+  border-radius: 20px;
+  background: var(--bg-elevated);
+  border: none;
+  padding: 14px 18px;
+  font-size: 1rem;
+}
+
+.question-reply-form {
+  gap: 10px;
+}
+
+.question-answers-label {
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.question-answers-head {
+  margin-bottom: 16px;
+}
+
+.question-content {
+  padding: 16px 20px 32px;
+}
+
+.answer-card {
+  margin-bottom: 14px;
+  padding: 18px 20px;
+  border-radius: 20px;
+}
+
+.answer-card-text {
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--text-on-light-secondary);
 }
 
 .msg-bubble:active .msg-bubble-inner {
@@ -1090,7 +1189,7 @@
 }
 
 .msg-bubble-mine .msg-author {
-  color: #a7f3e8;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .msg-reply-btn {

@@ -1,0 +1,498 @@
+/**
+ * Bubblle reference design — premium consumer UI
+ * Dark shell #0F1115 · White cards #FFFFFF · Accent #FF6B35
+ */
+
+/* —— Landing header —— */
+.home-header {
+  padding: 14px 20px;
+  padding-top: max(14px, env(safe-area-inset-top));
+  gap: 12px;
+}
+
+.home-location {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.home-location-pin {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.home-location-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-location-chevron {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.home-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.home-map-btn {
+  color: var(--text-muted);
+}
+
+.home-map-btn:hover {
+  color: var(--accent);
+}
+
+.home-identity .identity {
+  border: none;
+  background: var(--bg-elevated);
+  padding: 4px 10px 4px 6px;
+}
+
+/* —— Feed layout: search → tabs → content —— */
+.feed-search-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  padding: 8px 0 12px;
+  background: var(--bg-app);
+}
+
+.home-feed-panel {
+  padding: 0 20px calc(88px + env(safe-area-inset-bottom));
+}
+
+.home-feed {
+  padding-top: 4px;
+}
+
+.feed-search-input {
+  padding: 14px 14px 14px 44px;
+  border-radius: 16px;
+  background: var(--bg-elevated);
+  font-size: 1rem;
+}
+
+.feed-search-icon {
+  left: 14px;
+}
+
+/* —— Tabs: orange underline (reference) —— */
+.feed-tabs-wrap {
+  margin-top: 4px;
+}
+
+.feed-tabs {
+  gap: 0;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.feed-tab {
+  flex: 1;
+  min-height: 44px;
+  padding: 10px 8px 12px;
+  border-radius: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  position: relative;
+  background: transparent;
+}
+
+.feed-tab.is-active {
+  color: var(--text);
+  background: transparent;
+  box-shadow: none;
+}
+
+.feed-tab.is-active::after {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--accent);
+}
+
+.feed-tab-action-btn--ask {
+  border-radius: 14px;
+  min-height: 50px;
+  font-size: 1rem;
+}
+
+.feed-tab-action-btn--create {
+  border-radius: 14px;
+  min-height: 50px;
+}
+
+/* —— Section headers —— */
+.feed-section {
+  margin-bottom: 32px;
+}
+
+.feed-section-head {
+  margin-bottom: 16px;
+}
+
+.feed-section-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+
+.feed-card-list {
+  gap: 14px;
+}
+
+/* —— Community cards: white, reference layout —— */
+.bubble-card {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+  background: var(--bg-content);
+  border: none;
+  border-radius: 20px;
+  box-shadow: var(--shadow-content);
+  transition: transform 0.15s var(--ease), box-shadow 0.15s var(--ease);
+}
+
+.bubble-card:hover {
+  background: var(--bg-content);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+.bubble-card--selected {
+  box-shadow: 0 0 0 2px var(--accent), var(--shadow-content);
+  background: var(--bg-content);
+}
+
+.bubble-card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #0f1115;
+  font-size: 1.35rem;
+}
+
+.bubble-card-title {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--text-on-light);
+  margin: 0 0 4px;
+}
+
+.bubble-card-active,
+.bubble-card-detail {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: var(--text-on-light-muted);
+}
+
+.bubble-card-join {
+  min-width: auto;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.bubble-card-join::after {
+  display: none;
+}
+
+.bubble-card-join:hover {
+  background: transparent;
+  color: var(--accent-hover);
+}
+
+.bubble-card-badge {
+  top: 14px;
+  right: 14px;
+  background: rgba(255, 107, 53, 0.12);
+  color: var(--accent);
+}
+
+.bubble-card--compact {
+  flex: 0 0 min(280px, 82vw);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  grid-template-columns: unset;
+}
+
+.bubble-card--compact .bubble-card-join--sm {
+  margin-top: 12px;
+  width: 100%;
+  text-align: center;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+}
+
+.feed-trending-row .bubble-card {
+  flex: 0 0 min(280px, 82vw);
+}
+
+/* —— Question cards: premium white content —— */
+.question-card {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  column-gap: 16px;
+  row-gap: 0;
+  align-items: start;
+  padding: 20px;
+  background: var(--bg-content);
+  border-radius: 20px;
+  box-shadow: var(--shadow-content);
+}
+
+.question-card-qmark {
+  grid-row: 1 / span 2;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: #fff;
+  background: var(--accent);
+  line-height: 1;
+}
+
+.question-card-title {
+  margin: 0 0 8px;
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.03em;
+  color: var(--text-on-light);
+}
+
+.question-card-tag {
+  display: inline-block;
+  margin-bottom: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(255, 107, 53, 0.1);
+}
+
+.question-card-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin-bottom: 6px;
+}
+
+.question-card-stat {
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: var(--text-on-light-muted);
+}
+
+.question-card-stat:not(:last-child)::after {
+  content: none;
+}
+
+.question-card-stat--answers {
+  font-weight: 600;
+  color: var(--text-on-light-secondary);
+}
+
+.question-card-time {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-on-light-muted);
+}
+
+.question-card::after {
+  display: none;
+}
+
+/* —— Map sheet (secondary, not in main feed) —— */
+.bottom-sheet--map {
+  max-height: min(92vh, 780px);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.map-sheet-body {
+  padding: 0 16px 16px;
+  overflow-y: auto;
+  max-height: calc(92vh - 72px);
+}
+
+.bottom-sheet--map .map-tab-map-wrap {
+  height: min(48vh, 340px);
+  min-height: 220px;
+  margin-bottom: 16px;
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+/* —— Home dock (Map · + · Groups) —— */
+.home-dock {
+  display: none;
+  position: fixed;
+  left: 20px;
+  right: 20px;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  z-index: 30;
+  padding: 8px 12px;
+  border-radius: 20px;
+  background: rgba(24, 28, 35, 0.96);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  align-items: center;
+  justify-content: space-around;
+  gap: 8px;
+}
+
+.chat-app--home .home-dock {
+  display: flex;
+}
+
+body.sheet-open .home-dock {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chat-app--room .home-dock,
+.chat-app--question .home-dock {
+  display: none !important;
+}
+
+.home-dock-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 48px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.home-dock-btn--primary {
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+  margin-top: -20px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.35);
+}
+
+.home-dock-btn--primary span {
+  display: none;
+}
+
+/* —— Ask question sheet —— */
+.sheet-input {
+  width: 100%;
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: none;
+  background: var(--bg-content);
+  color: var(--text-on-light);
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.sheet-input--large {
+  min-height: 120px;
+  font-size: 1.0625rem;
+  font-weight: 500;
+}
+
+.sheet-input::placeholder {
+  color: var(--text-on-light-muted);
+}
+
+.create-sheet-form input.sheet-input,
+.create-sheet-form textarea.sheet-input {
+  min-height: 52px;
+}
+
+.bottom-sheet {
+  background: var(--bg-app);
+  border-radius: 24px 24px 0 0;
+  border-top: none;
+}
+
+.btn-sheet-primary {
+  min-height: 52px;
+  border-radius: 14px;
+  font-size: 1rem;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+/* —— Search results —— */
+.feed-search-empty {
+  padding: 40px 20px;
+  background: transparent;
+  border: none;
+}
+
+.feed-recent-search-item {
+  background: var(--bg-content);
+  border: none;
+  border-radius: 16px;
+  color: var(--text-on-light);
+  box-shadow: var(--shadow-content);
+}
+
+.feed-tab-empty {
+  padding: 48px 24px;
+  background: transparent;
+  border: none;
+}
