@@ -99,7 +99,7 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Bump on deploy when frontend behavior/storage schema changes (see client-state.js).
-BUBBLLE_CLIENT_VERSION = os.environ.get("BUBBLLE_CLIENT_VERSION", "6")
+BUBBLLE_CLIENT_VERSION = os.environ.get("BUBBLLE_CLIENT_VERSION", "7")
 # Optional explicit static cache-bust query param in templates (DEBUG / unhashed assets).
 BUBBLLE_STATIC_VERSION = os.environ.get(
     "BUBBLLE_STATIC_VERSION",
