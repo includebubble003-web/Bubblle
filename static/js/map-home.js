@@ -4,7 +4,6 @@
 import {
   activeUsers,
   bubbleFingerprint,
-  markerFingerprint,
   syncOrderedList,
 } from "./bubble-sync.js";
 import {
@@ -31,22 +30,29 @@ import {
   questionHref,
 } from "./questions.js";
 import { topicIcon } from "./topic-icons.js";
+import {
+  MAP_PIN_SIZE,
+  buildMapEntities,
+  entityMarkerFingerprint,
+  mapEntityKey,
+  mapPinHtml,
+  mapPreviewHtml,
+} from "./map-entities.js";
 
 let map = null;
 let userMarker = null;
 let markersLayer = null;
-let questionMarkersLayer = null;
-const markerById = new Map();
-const questionMarkerById = new Map();
+const entityMarkerByKey = new Map();
+const entityMarkerStateById = new Map();
+const entityByKey = new Map();
 const bubbleById = new Map();
 let hooks = {};
 let feedLoading = false;
 let feedLoadedOnce = false;
 let selectedBubbleId = null;
+let selectedMapEntityKey = null;
 let mapMoveTimer = null;
 let suppressMapMoveRefresh = false;
-const markerStateById = new Map();
-const questionMarkerStateById = new Map();
 let similarSearchTimer = null;
 let similarFetchAbort = null;
 const SIMILAR_SEARCH_MS = 320;
@@ -99,10 +105,6 @@ function bubbleCardDetailsHtml(b) {
   </div>`;
 }
 
-function bubbleInitial(title) {
-  const t = String(title || "?").trim();
-  return t ? t.charAt(0).toUpperCase() : "?";
-}
 
 function fmtLastActivity(b) {
   const count = activeUsers(b);
@@ -121,36 +123,133 @@ function isTrending(b, all) {
   return count >= max && count >= 2;
 }
 
-function markerSize(count) {
-  return Math.min(44, Math.max(28, 26 + count * 3));
+function hideMapPreviewPanel() {
+  const preview = $("#map-marker-preview");
+  if (preview) preview.hidden = true;
 }
 
-function bubbleIconHtml(b, { trending = false, isNew = false, selected = false } = {}) {
-  const count = activeUsers(b);
-  const size = markerSize(count);
-  const initial = bubbleInitial(b.title);
-  const pulse = trending ? " map-marker-pulse" : "";
-  const hot = count >= 3 ? " map-marker-hot" : "";
-  const enter = isNew ? " map-marker-enter" : "";
-  const sel = selected ? " map-marker-selected" : "";
-  return `<div class="map-marker${pulse}${hot}${enter}${sel}" style="--marker-size:${size}px" data-bubble-id="${escapeHtml(b.id)}">
-    <span class="map-marker-ring" aria-hidden="true"></span>
-    <span class="map-marker-core">${escapeHtml(initial)}</span>
-    <span class="map-marker-count">${count}</span>
-  </div>`;
+function closeMapPreview() {
+  selectedMapEntityKey = null;
+  selectedBubbleId = null;
+  document.querySelectorAll(".bubble-card").forEach((el) => {
+    el.classList.remove("bubble-card--selected");
+  });
+  hideMapPreviewPanel();
+  refreshMapMarkerIcons();
 }
 
-function questionMarkerHtml(q) {
-  const replies = Number(q.reply_count) || 0;
-  const hot = replies >= 3;
-  return `<div class="map-question-marker${hot ? " map-question-marker--hot" : ""}" data-question-id="${escapeHtml(q.id)}" title="${escapeHtml(q.title || "Question")}">
-    <span class="map-question-marker-icon" aria-hidden="true">?</span>
-    ${replies > 0 ? `<span class="map-question-marker-count">${replies}</span>` : ""}
-  </div>`;
+function openMapPreview(entity) {
+  if (!entity) return;
+  selectedMapEntityKey = mapEntityKey(entity);
+
+  if (entity.type === "community") {
+    selectedBubbleId = entity.id;
+    document.querySelectorAll(".bubble-card").forEach((el) => {
+      el.classList.toggle("bubble-card--selected", el.dataset.bubbleId === selectedBubbleId);
+    });
+  } else {
+    selectedBubbleId = null;
+    document.querySelectorAll(".bubble-card").forEach((el) => {
+      el.classList.remove("bubble-card--selected");
+    });
+  }
+
+  const inner = $("#map-marker-preview-inner");
+  if (inner) inner.innerHTML = mapPreviewHtml(entity, { escapeHtml });
+  const preview = $("#map-marker-preview");
+  if (preview) preview.hidden = false;
+
+  refreshMapMarkerIcons();
+
+  if (map && Number.isFinite(entity.latitude) && Number.isFinite(entity.longitude)) {
+    suppressMapMoveRefresh = true;
+    map.panTo([entity.latitude, entity.longitude], { animate: true, duration: 0.35 });
+    setTimeout(() => {
+      suppressMapMoveRefresh = false;
+    }, 400);
+  }
 }
 
-function questionMarkerFingerprint(q) {
-  return `${q.id}|${q.latitude}|${q.longitude}|r:${q.reply_count || 0}`;
+function makeMapPinIcon(entity, { selected = false } = {}) {
+  return L.divIcon({
+    className: "map-pin-wrap",
+    html: mapPinHtml(entity, { selected, escapeHtml }),
+    iconSize: [MAP_PIN_SIZE, MAP_PIN_SIZE],
+    iconAnchor: [MAP_PIN_SIZE / 2, MAP_PIN_SIZE / 2],
+  });
+}
+
+function refreshMapMarkerIcons() {
+  for (const [key, marker] of entityMarkerByKey) {
+    const entity = entityByKey.get(key);
+    if (!entity) continue;
+    const selected = key === selectedMapEntityKey;
+    const fp = entityMarkerFingerprint(entity, { selected });
+    if (entityMarkerStateById.get(key) === fp) continue;
+    marker.setIcon(makeMapPinIcon(entity, { selected }));
+    entityMarkerStateById.set(key, fp);
+  }
+}
+
+function syncMapEntities(bubbles, questions) {
+  ensureMap();
+  if (!map || !markersLayer) return;
+
+  bubbleById.clear();
+  for (const b of bubbles || []) bubbleById.set(b.id, b);
+
+  entityByKey.clear();
+  const entities = buildMapEntities(bubbles, questions);
+  for (const ent of entities) entityByKey.set(mapEntityKey(ent), ent);
+
+  const nextKeys = new Set(entities.map(mapEntityKey));
+  for (const [key, marker] of entityMarkerByKey) {
+    if (!nextKeys.has(key)) {
+      markersLayer.removeLayer(marker);
+      entityMarkerByKey.delete(key);
+      entityMarkerStateById.delete(key);
+    }
+  }
+
+  for (const entity of entities) {
+    const key = mapEntityKey(entity);
+    const latlng = [entity.latitude, entity.longitude];
+    const selected = key === selectedMapEntityKey;
+    const fp = entityMarkerFingerprint(entity, { selected });
+    const zIndex = entity.type === "question" ? 200 : 0;
+    let marker = entityMarkerByKey.get(key);
+
+    if (marker) {
+      marker.setLatLng(latlng);
+      marker.setZIndexOffset(zIndex);
+      if (entityMarkerStateById.get(key) !== fp) {
+        marker.setIcon(makeMapPinIcon(entity, { selected }));
+        entityMarkerStateById.set(key, fp);
+      }
+    } else {
+      marker = L.marker(latlng, {
+        icon: makeMapPinIcon(entity, { selected }),
+        zIndexOffset: zIndex,
+      });
+      marker.on("click", (e) => {
+        L.DomEvent.stopPropagation(e);
+        const ent = entityByKey.get(key);
+        if (ent) openMapPreview(ent);
+      });
+      marker.addTo(markersLayer);
+      entityMarkerByKey.set(key, marker);
+      entityMarkerStateById.set(key, fp);
+    }
+  }
+
+  if (selectedBubbleId && !bubbleById.has(selectedBubbleId)) {
+    selectBubble(null);
+  }
+  if (selectedMapEntityKey && !entityByKey.has(selectedMapEntityKey)) {
+    closeMapPreview();
+  }
+
+  updateLiveBadge(bubbles);
 }
 
 function invalidateMapSoon() {
@@ -199,7 +298,6 @@ function ensureMap() {
   L.control.zoom({ position: "bottomright" }).addTo(map);
 
   markersLayer = L.layerGroup().addTo(map);
-  questionMarkersLayer = L.layerGroup().addTo(map);
 
   userMarker = L.circleMarker([0, 0], {
     radius: 8,
@@ -221,6 +319,7 @@ function ensureMap() {
   userMarker._ring = youRing;
 
   map.on("moveend", scheduleDiscoveryRefresh);
+  map.on("click", () => closeMapPreview());
 
   invalidateMapSoon();
   return map;
@@ -260,145 +359,27 @@ function recenterOnUser() {
   }, 350);
 }
 
-function updateMarkerIcon(b, bubbles) {
-  const marker = markerById.get(b.id);
-  if (!marker) return;
-  const trending = isTrending(b, bubbles);
-  const selected = selectedBubbleId === b.id;
-  const fp = markerFingerprint(b, { trending, selected });
-  if (markerStateById.get(b.id) === fp) return;
-
-  const size = markerSize(activeUsers(b));
-  const icon = L.divIcon({
-    className: "map-marker-wrap",
-    html: bubbleIconHtml(b, { trending, selected }),
-    iconSize: [size, size + 10],
-    iconAnchor: [size / 2, size / 2 + 5],
-  });
-  marker.setIcon(icon);
-  markerStateById.set(b.id, fp);
-}
-
-function syncMapMarkers(bubbles) {
-  ensureMap();
-  if (!map || !markersLayer) return;
-
-  bubbleById.clear();
-  for (const b of bubbles) bubbleById.set(b.id, b);
-
-  const nextIds = new Set(bubbles.map((b) => b.id));
-  for (const [id, marker] of markerById) {
-    if (!nextIds.has(id)) {
-      markersLayer.removeLayer(marker);
-      markerById.delete(id);
-      markerStateById.delete(id);
-    }
-  }
-
-  for (const b of bubbles) {
-    const isNew = !markerById.has(b.id);
-    const trending = isTrending(b, bubbles);
-    const selected = selectedBubbleId === b.id;
-    const fp = markerFingerprint(b, { trending, selected });
-    const latlng = [b.latitude, b.longitude];
-    let marker = markerById.get(b.id);
-
-    if (marker) {
-      marker.setLatLng(latlng);
-      if (markerStateById.get(b.id) !== fp) {
-        const size = markerSize(activeUsers(b));
-        const icon = L.divIcon({
-          className: "map-marker-wrap",
-          html: bubbleIconHtml(b, { trending, isNew: false, selected }),
-          iconSize: [size, size + 10],
-          iconAnchor: [size / 2, size / 2 + 5],
-        });
-        marker.setIcon(icon);
-        markerStateById.set(b.id, fp);
-      }
-    } else {
-      const size = markerSize(activeUsers(b));
-      const icon = L.divIcon({
-        className: "map-marker-wrap",
-        html: bubbleIconHtml(b, { trending, isNew, selected }),
-        iconSize: [size, size + 10],
-        iconAnchor: [size / 2, size / 2 + 5],
-      });
-      marker = L.marker(latlng, { icon }).addTo(markersLayer);
-      marker.on("click", (e) => {
-        L.DomEvent.stopPropagation(e);
-        selectBubble(b.id, { scroll: true, pan: true });
-      });
-      markerById.set(b.id, marker);
-      markerStateById.set(b.id, fp);
-    }
-  }
-
-  if (selectedBubbleId && !nextIds.has(selectedBubbleId)) {
-    selectBubble(null);
-  }
-
-  updateLiveBadge(bubbles);
-}
-
-function syncMapQuestionMarkers(questions) {
-  ensureMap();
-  if (!map || !questionMarkersLayer) return;
-
-  const valid = (questions || []).filter(
-    (q) => Number.isFinite(q.latitude) && Number.isFinite(q.longitude),
-  );
-  const nextIds = new Set(valid.map((q) => q.id));
-
-  for (const [id, marker] of questionMarkerById) {
-    if (!nextIds.has(id)) {
-      questionMarkersLayer.removeLayer(marker);
-      questionMarkerById.delete(id);
-      questionMarkerStateById.delete(id);
-    }
-  }
-
-  for (const q of valid) {
-    const latlng = [q.latitude, q.longitude];
-    const fp = questionMarkerFingerprint(q);
-    let marker = questionMarkerById.get(q.id);
-    const icon = L.divIcon({
-      className: "map-question-marker-wrap",
-      html: questionMarkerHtml(q),
-      iconSize: [32, 36],
-      iconAnchor: [16, 18],
-    });
-
-    if (marker) {
-      marker.setLatLng(latlng);
-      if (questionMarkerStateById.get(q.id) !== fp) {
-        marker.setIcon(icon);
-        questionMarkerStateById.set(q.id, fp);
-      }
-    } else {
-      marker = L.marker(latlng, { icon, zIndexOffset: 200 });
-      marker.on("click", (e) => {
-        L.DomEvent.stopPropagation(e);
-        window.location.href = questionHref(q.id);
-      });
-      marker.addTo(questionMarkersLayer);
-      questionMarkerById.set(q.id, marker);
-      questionMarkerStateById.set(q.id, fp);
-    }
-  }
-}
-
-export function selectBubble(id, { scroll = false, pan = false } = {}) {
+export function selectBubble(id, { scroll = false, pan = false, preview = false } = {}) {
   selectedBubbleId = id || null;
+  selectedMapEntityKey = id ? `community:${id}` : null;
 
   document.querySelectorAll(".bubble-card").forEach((el) => {
     el.classList.toggle("bubble-card--selected", el.dataset.bubbleId === selectedBubbleId);
   });
 
-  const bubbles = hooks.getNearbyBubbles?.() || [];
-  for (const b of bubbles) updateMarkerIcon(b, bubbles);
+  if (!selectedBubbleId) {
+    closeMapPreview();
+    return;
+  }
 
-  if (!selectedBubbleId) return;
+  const entity = entityByKey.get(selectedMapEntityKey);
+  if (preview && entity) {
+    openMapPreview(entity);
+    return;
+  }
+
+  hideMapPreviewPanel();
+  refreshMapMarkerIcons();
 
   if (scroll) {
     const card = document.querySelector(`.bubble-card[data-bubble-id="${selectedBubbleId}"]`);
@@ -1435,6 +1416,15 @@ function setupMapUi() {
     recenterOnUser();
   });
 
+  $("#map-marker-preview-close")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    closeMapPreview();
+  });
+
+  $("#map-marker-preview")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+  });
+
   $("#sheet-backdrop")?.addEventListener("click", closeAllSheets);
   $("#create-sheet-close")?.addEventListener("click", closeAllSheets);
 
@@ -1706,7 +1696,6 @@ export function onMapPositionUpdate(pos) {
 }
 
 export function onMapBubblesUpdated(bubbles, questions = hooks.getNearbyQuestions?.() || []) {
-  syncMapMarkers(bubbles);
-  syncMapQuestionMarkers(questions);
+  syncMapEntities(bubbles, questions);
   renderBubbleFeed(bubbles, questions);
 }

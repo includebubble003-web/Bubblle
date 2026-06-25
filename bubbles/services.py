@@ -145,6 +145,7 @@ def serialize_bubble_summary(bubble: Bubble, viewer_lat: float, viewer_lng: floa
     dist = haversine_distance_m(viewer_lat, viewer_lng, bubble.latitude, bubble.longitude)
     users = active_user_count(bubble.id) if bubble.is_joinable() else 0
     return {
+        "type": "community",
         "id": str(bubble.id),
         "title": bubble.title,
         "latitude": bubble.latitude,
@@ -168,6 +169,7 @@ def serialize_question_summary(
     count = reply_count if reply_count is not None else question.replies.count()
     bubble = question.bubble
     return {
+        "type": "question",
         "id": str(question.id),
         "title": question.title,
         "description": question.description or "",

@@ -1289,6 +1289,183 @@
   100% { transform: scale(1.15); opacity: 0; }
 }
 
+/* Unified map pins (community 💬 + question ❓) */
+.map-pin-wrap {
+  background: transparent !important;
+  border: none !important;
+}
+
+.map-pin {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s var(--ease);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.map-pin:active {
+  transform: scale(0.94);
+}
+
+.map-pin-emoji {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.125rem;
+  line-height: 1;
+  background: var(--bg-card);
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.38);
+}
+
+.map-pin--question .map-pin-emoji {
+  background: linear-gradient(145deg, rgba(255, 178, 107, 0.25), rgba(255, 107, 53, 0.2));
+  border-color: rgba(255, 107, 53, 0.35);
+}
+
+.map-pin--community .map-pin-emoji {
+  background: linear-gradient(145deg, rgba(255, 107, 53, 0.22), rgba(255, 107, 53, 0.14));
+  border-color: rgba(255, 107, 53, 0.3);
+}
+
+.map-pin--hot .map-pin-emoji {
+  border-color: rgba(255, 107, 53, 0.55);
+  box-shadow: 0 4px 16px rgba(255, 107, 53, 0.32);
+}
+
+.map-pin--selected .map-pin-emoji {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.28), 0 6px 18px rgba(255, 107, 53, 0.28);
+  transform: scale(1.08);
+}
+
+.map-pin-badge {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #13161c;
+  border: 1.5px solid var(--ok);
+  color: var(--ok);
+  font-size: 0.5625rem;
+  font-weight: 700;
+  line-height: 13px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* Map marker preview card */
+.map-marker-preview {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 25;
+  padding: 14px 14px 12px;
+  border-radius: var(--radius-card);
+  background: rgba(24, 28, 35, 0.96);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(20px);
+  animation: map-preview-in 0.22s var(--ease);
+}
+
+@keyframes map-preview-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.map-marker-preview-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+  font-size: 1.125rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.map-preview-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-right: 24px;
+}
+
+.map-preview-emoji {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  background: rgba(255, 107, 53, 0.1);
+  border: 1px solid rgba(255, 107, 53, 0.16);
+}
+
+.map-preview-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.map-preview-title {
+  margin: 0 0 4px;
+  font-size: 0.9375rem;
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.map-preview-meta {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.map-preview-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, var(--accent), var(--accent-deep));
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 4px 14px rgba(255, 107, 53, 0.26);
+  transition: transform 0.12s var(--ease), box-shadow 0.15s var(--ease);
+}
+
+.map-preview-action:active {
+  transform: scale(0.98);
+}
+
+/* Legacy map marker classes (kept for reference; pins use .map-pin-* above) */
 .map-question-marker-wrap {
   background: transparent !important;
   border: none !important;

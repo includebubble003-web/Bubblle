@@ -274,6 +274,10 @@
                       <button type="button" class="map-recenter-btn" id="btn-map-recenter" hidden aria-label="Recenter on my location" title="My location">
                         <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
                       </button>
+                      <aside class="map-marker-preview" id="map-marker-preview" hidden aria-live="polite">
+                        <button type="button" class="map-marker-preview-close" id="map-marker-preview-close" aria-label="Close preview">&times;</button>
+                        <div class="map-marker-preview-inner" id="map-marker-preview-inner"></div>
+                      </aside>
                     </div>
 
                     <section class="feed-section feed-section--map-list" id="feed-map-communities-section" hidden>
@@ -589,7 +593,7 @@
 <script>
   window.__BUBBLE_ID__ = "{{ bubble_id|default:'' }}";
   window.__QUESTION_ID__ = "{{ question_id|default:'' }}";
-  window.__BUBBLLE_CLIENT_VERSION__ = "{{ BUBBLLE_CLIENT_VERSION|default:'4' }}";
+  window.__BUBBLLE_CLIENT_VERSION__ = "{{ BUBBLLE_CLIENT_VERSION|default:'5' }}";
 </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="{% static_v 'js/chat-app.js' %}" type="module"></script>

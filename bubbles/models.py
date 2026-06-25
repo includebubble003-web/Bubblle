@@ -99,7 +99,12 @@ class ScheduledMessage(models.Model):
 
 
 class Question(models.Model):
-    """Location-scoped anonymous Q&A — independent of bubble chat."""
+    """Location-scoped anonymous Q&A with its own map coordinates.
+
+    ``bubble`` is an optional community tag for context (feeds, ask flow).
+    Map placement always uses ``latitude`` / ``longitude`` on this model.
+    See docs/MAP_ARCHITECTURE.md.
+    """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=200)
@@ -113,6 +118,7 @@ class Question(models.Model):
         blank=True,
         on_delete=models.SET_NULL,
         related_name="questions",
+        help_text="Optional community tag — not used for map placement.",
     )
     active = models.BooleanField(default=True, db_index=True)
     system_seed_content = models.BooleanField(
