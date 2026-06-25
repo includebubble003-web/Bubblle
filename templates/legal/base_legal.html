@@ -8,9 +8,9 @@
 {% block body %}
 <div class="legal-page">
   <header class="legal-header">
-    <a href="/" class="legal-back" aria-label="Back to Bubblle">
+    <a href="/" class="legal-back" aria-label="Back to bubblle.me">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
-      <span>Bubblle</span>
+      {% include "partials/brand_logo.html" with logo_class="brand-logo--legal" %}
     </a>
     <nav class="legal-nav" aria-label="Legal">
       <a href="{% url 'privacy-policy' %}"{% if legal_page == 'privacy' %} aria-current="page"{% endif %}>Privacy</a>
@@ -25,7 +25,7 @@
   </main>
 
   <footer class="legal-footer">
-    <p>Questions? <a href="mailto:hello@bubblle.me">hello@bubblle.me</a></p>
+    <p>Questions? <a href="mailto:includebubble003@gmail.com">includebubble003@gmail.com</a></p>
     <p class="legal-footer-links">
       <a href="{% url 'privacy-policy' %}">Privacy Policy</a>
       <span aria-hidden="true">·</span>

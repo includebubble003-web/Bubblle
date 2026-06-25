@@ -61,15 +61,34 @@ a:hover {
 }
 
 .brand {
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  font-size: 1.05rem;
-  color: var(--text);
+  display: inline-flex;
+  align-items: center;
   text-decoration: none;
+  color: var(--text);
 }
 .brand:hover {
   text-decoration: none;
-  color: var(--accent);
+}
+
+.brand-logo {
+  display: block;
+  height: 28px;
+  width: auto;
+  max-width: min(148px, 58vw);
+  object-fit: contain;
+}
+
+.brand-logo--legal {
+  height: 26px;
+}
+
+.brand-logo--onboarding {
+  height: 44px;
+  max-width: min(220px, 78vw);
+}
+
+.brand:hover .brand-logo {
+  opacity: 0.9;
 }
 
 .badge {

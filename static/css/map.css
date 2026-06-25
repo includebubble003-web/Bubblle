@@ -705,6 +705,12 @@
   text-align: center;
 }
 
+.onboarding-brand {
+  margin: 0 auto 20px;
+  display: flex;
+  justify-content: center;
+}
+
 .onboarding-icon {
   width: 56px;
   height: 56px;

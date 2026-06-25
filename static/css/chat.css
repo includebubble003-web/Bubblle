@@ -124,28 +124,11 @@
 .chat-app .brand {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
   text-decoration: none;
-  color: var(--text);
-  font-weight: 700;
-  font-size: 1.05rem;
-  letter-spacing: -0.03em;
-  transition: color 0.2s var(--ease);
 }
 
-.chat-app .brand:hover {
-  color: var(--accent);
-}
-
-.brand-mark {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-  background: var(--accent-soft);
-  border: none;
+.chat-app .brand .brand-logo {
+  height: 30px;
 }
 
 .sidebar-loc-pill {

@@ -1,0 +1,9 @@
+{% load static_v %}
+<img
+  class="brand-logo{% if logo_class %} {{ logo_class }}{% endif %}"
+  src="{% static_v 'img/bubblle-logo.png' %}"
+  alt="bubblle.me"
+  width="140"
+  height="62"
+  decoding="async"
+/>
