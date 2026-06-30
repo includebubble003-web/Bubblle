@@ -45,6 +45,16 @@
   --shadow-content: 0 1px 3px rgba(0, 0, 0, 0.06), 0 6px 20px rgba(0, 0, 0, 0.08);
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
   --sidebar-w: 340px;
+  --text-title: 1.625rem;
+  --text-section: 1.25rem;
+  --text-card-title: 1.125rem;
+  --text-body: 0.9375rem;
+  --text-meta: 0.8125rem;
+  --text-time: 0.75rem;
+}
+
+body.chat-body {
+  font-size: var(--text-body);
 }
 
 [hidden] {
@@ -1892,8 +1902,8 @@ body.drawer-open {
 
 /* —— Hero: title-first discussion header —— */
 .question-hero {
-  margin-bottom: 28px;
-  padding: 24px 20px;
+  margin-bottom: 20px;
+  padding: 18px 16px;
   border-radius: var(--radius-card);
   background: var(--bg-content);
   box-shadow: var(--shadow-content);
@@ -1907,17 +1917,17 @@ body.drawer-open {
 }
 
 .question-hero-title {
-  margin: 0 0 12px;
-  font-size: clamp(1.5rem, 5.5vw, 2rem);
-  font-weight: 700;
+  margin: 0 0 8px;
+  font-size: clamp(1.375rem, 5vw, 1.625rem);
+  font-weight: 600;
   line-height: 1.25;
   letter-spacing: -0.035em;
   color: var(--text-on-light);
 }
 
 .question-hero-description {
-  margin: 0 0 14px;
-  font-size: 1rem;
+  margin: 0 0 10px;
+  font-size: var(--text-body);
   line-height: 1.65;
   color: var(--text-on-light-secondary);
 }

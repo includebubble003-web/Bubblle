@@ -1,6 +1,7 @@
 /**
  * Local Q&A helpers — question cards, formatting, search matching.
  */
+import { topicIcon } from "./topic-icons.js";
 
 export function questionHref(id) {
   return `/question/${id}/`;
@@ -115,26 +116,22 @@ export function questionCardMeta(question) {
 
 export function questionCardHtml(q, { escapeHtml }) {
   const replies = Number(q.reply_count) || 0;
-  const answerLabel = `${replies} ${replies === 1 ? "Answer" : "Answers"}`;
-  const dist = fmtQuestionDistance(q.distance_m);
-  const activity = fmtQuestionActivity(q.last_activity_at);
-  const timeLabel =
-    activity && activity !== "Active now" ? `Asked ${activity.toLowerCase()}` : "Asked recently";
-  const community = q.bubble_title
-    ? `<span class="question-card-tag">${escapeHtml(q.bubble_title)}</span>`
-    : "";
+  const emoji = topicIcon(q.title, { kind: "question" });
+  const timeLabel = fmtTimeAgo(q.last_activity_at || q.created_at) || "recently";
+  const hook = replies > 0 ? "Latest:" : "Be the first to answer";
 
-  return `<article class="question-card" data-question-id="${escapeHtml(q.id)}" tabindex="0" role="link">
-    <div class="question-card-qmark" aria-hidden="true">?</div>
-    <div class="question-card-body">
-      <h3 class="question-card-title">${escapeHtml(q.title || "Question")}</h3>
-      ${community}
-      <div class="question-card-meta-row">
-        <span class="question-card-stat question-card-stat--answers">${escapeHtml(answerLabel)}</span>
-        ${dist ? `<span class="question-card-stat">${escapeHtml(dist)}</span>` : ""}
+  return `<article class="activity-card activity-card--question question-card" data-question-id="${escapeHtml(q.id)}" tabindex="0" role="link">
+    <div class="activity-card-icon question-card-qmark" aria-hidden="true">${emoji}</div>
+    <div class="activity-card-body question-card-body">
+      <h3 class="activity-card-title question-card-title">${escapeHtml(q.title || "Question")}</h3>
+      <p class="activity-card-hook">${escapeHtml(hook)}</p>
+      <p class="activity-card-preview question-card-preview--empty">Tap to see the discussion</p>
+      <div class="activity-card-meta question-card-meta-row">
+        <span class="question-card-stat question-card-stat--answers">${escapeHtml(fmtReplyCountReplies(replies))}</span>
+        <span>${escapeHtml(timeLabel)}</span>
       </div>
-      <p class="question-card-time">${escapeHtml(timeLabel)}</p>
     </div>
+    <a href="${escapeHtml(questionHref(q.id))}" class="activity-card-cta">Join →</a>
   </article>`;
 }
 

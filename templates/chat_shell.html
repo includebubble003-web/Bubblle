@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="{% static_v 'css/chat.css' %}" />
 <link rel="stylesheet" href="{% static_v 'css/map.css' %}" />
 <link rel="stylesheet" href="{% static_v 'css/bubblle-ref.css' %}" />
+<link rel="stylesheet" href="{% static_v 'css/activity-feed.css' %}" />
 {% endblock %}
 {% block body_class %}chat-body{% endblock %}
 {% block body %}
@@ -95,7 +96,7 @@
                 <button type="button" class="feed-search-cancel" id="feed-search-cancel" hidden>Cancel</button>
               </div>
 
-              <div class="feed-tabs-wrap" id="feed-tabs-wrap" hidden>
+              <div class="feed-tabs-wrap" id="feed-tabs-wrap" hidden aria-hidden="true">
                 <div class="feed-tabs" role="tablist" aria-label="Discover content">
                   <button type="button" class="feed-tab is-active" role="tab" id="feed-tab-btn-for-you" data-feed-tab="for-you" aria-selected="true" aria-controls="feed-panel-for-you">For You</button>
                   <button type="button" class="feed-tab" role="tab" id="feed-tab-btn-questions" data-feed-tab="questions" aria-selected="false" aria-controls="feed-panel-questions">
@@ -107,7 +108,7 @@
                 </div>
               </div>
 
-              <div class="feed-tab-actions" id="feed-tab-actions" hidden>
+              <div class="feed-tab-actions" id="feed-tab-actions" hidden aria-hidden="true">
                 <button type="button" class="feed-tab-action-btn feed-tab-action-btn--ask" id="feed-tab-action-ask" hidden>
                   <svg class="home-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <circle cx="12" cy="12" r="9"/>
@@ -182,7 +183,16 @@
                 </div>
               </div>
 
-              <div class="feed-tab-panels" id="feed-tab-panels" hidden>
+              <section class="feed-section feed-section--activity" id="feed-activity-section" hidden>
+                <div class="activity-feed-head">
+                  <h2 class="activity-feed-title" id="activity-feed-title">🔥 Happening Around You</h2>
+                  <button type="button" class="activity-feed-action" id="activity-feed-action" hidden>Start a group</button>
+                </div>
+                <div class="activity-feed-list feed-card-list" id="feed-activity"></div>
+                <p class="activity-feed-empty" id="activity-feed-empty" hidden>No groups nearby yet. Tap <strong>Start a group</strong> to create one.</p>
+              </section>
+
+              <div class="feed-tab-panels" id="feed-tab-panels" hidden aria-hidden="true">
                 <div class="feed-tab-panel is-active" id="feed-panel-for-you" data-feed-tab-panel="for-you" role="tabpanel" aria-labelledby="feed-tab-btn-for-you">
                   <section class="feed-section feed-section--recommended" id="feed-recommended-section" hidden>
                     <div class="feed-section-head">
@@ -316,17 +326,25 @@
       </div>
     </div>
 
-    <nav class="home-dock" id="home-dock" aria-label="Quick actions">
-      <button type="button" class="home-dock-btn" id="dock-map" aria-label="Open map">
-        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6 2-6 2V6z"/></svg>
+    <nav class="home-dock" id="home-dock" aria-label="Main navigation">
+      <button type="button" class="home-dock-btn is-active" id="dock-feed" data-dock-mode="feed" aria-label="Feed" aria-current="page">
+        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 10.5L12 4l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9.5z"/></svg>
+        <span>Feed</span>
+      </button>
+      <button type="button" class="home-dock-btn" id="dock-map" data-dock-mode="map" aria-label="Map">
+        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2V6z"/><path d="M9 4v14M15 6v14"/></svg>
         <span>Map</span>
       </button>
       <button type="button" class="home-dock-btn home-dock-btn--primary" id="dock-ask" aria-label="Ask a question">
         <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
       </button>
-      <button type="button" class="home-dock-btn" id="dock-create" aria-label="Start a group">
+      <button type="button" class="home-dock-btn" id="dock-groups" data-dock-mode="groups" aria-label="Groups">
         <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         <span>Groups</span>
+      </button>
+      <button type="button" class="home-dock-btn" id="dock-me" data-dock-mode="me" aria-label="Your profile">
+        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        <span>Me</span>
       </button>
     </nav>
 
@@ -603,7 +621,7 @@
 <script>
   window.__BUBBLE_ID__ = "{{ bubble_id|default:'' }}";
   window.__QUESTION_ID__ = "{{ question_id|default:'' }}";
-  window.__BUBBLLE_CLIENT_VERSION__ = "{{ BUBBLLE_CLIENT_VERSION|default:'10' }}";
+  window.__BUBBLLE_CLIENT_VERSION__ = "{{ BUBBLLE_CLIENT_VERSION|default:'11' }}";
 </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="{% static_v 'js/chat-app.js' %}" type="module"></script>

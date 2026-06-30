@@ -79,7 +79,7 @@
 }
 
 .home-feed-panel {
-  padding: 0 20px calc(88px + env(safe-area-inset-bottom));
+  padding: 0 16px calc(76px + env(safe-area-inset-bottom));
 }
 
 .home-feed {
@@ -152,21 +152,21 @@
 
 /* —— Section headers —— */
 .feed-section {
-  margin-bottom: 32px;
+  margin-bottom: 16px;
 }
 
 .feed-section-head {
-  margin-bottom: 16px;
+  margin-bottom: 8px;
 }
 
 .feed-section-title {
   font-size: 1.25rem;
-  font-weight: 700;
-  letter-spacing: -0.035em;
+  font-weight: 600;
+  letter-spacing: -0.03em;
 }
 
 .feed-card-list {
-  gap: 14px;
+  gap: 8px;
 }
 
 /* —— Community cards: white, reference layout —— */
