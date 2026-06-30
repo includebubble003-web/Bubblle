@@ -332,6 +332,10 @@
     </div>
 
     <nav class="home-dock" id="home-dock" aria-label="Quick actions">
+      <button type="button" class="home-dock-btn is-active" id="dock-feed" data-dock-tab="feed" aria-label="Feed">
+        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 10.5L12 4l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9.5z"/></svg>
+        <span>Feed</span>
+      </button>
       <button type="button" class="home-dock-btn" id="dock-map" aria-label="Open map">
         <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2V6z"/></svg>
         <span>Map</span>
@@ -339,9 +343,13 @@
       <button type="button" class="home-dock-btn home-dock-btn--primary" id="dock-ask" aria-label="Ask a question">
         <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
       </button>
-      <button type="button" class="home-dock-btn" id="dock-create" aria-label="Start a group">
+      <button type="button" class="home-dock-btn" id="dock-create" data-dock-tab="communities" aria-label="Communities">
         <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         <span>Groups</span>
+      </button>
+      <button type="button" class="home-dock-btn" id="dock-profile" aria-label="Your profile">
+        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        <span>Profile</span>
       </button>
     </nav>
 
@@ -618,7 +626,7 @@
 <script>
   window.__BUBBLE_ID__ = "{{ bubble_id|default:'' }}";
   window.__QUESTION_ID__ = "{{ question_id|default:'' }}";
-  window.__BUBBLLE_CLIENT_VERSION__ = "{{ BUBBLLE_CLIENT_VERSION|default:'12' }}";
+  window.__BUBBLLE_CLIENT_VERSION__ = "{{ BUBBLLE_CLIENT_VERSION|default:'13' }}";
 </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="{% static_v 'js/chat-app.js' %}" type="module"></script>

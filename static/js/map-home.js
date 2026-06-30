@@ -689,6 +689,12 @@ function setFeedTabsVisible(visible) {
   $("#feed-tab-panels")?.toggleAttribute("hidden", !visible);
 }
 
+function syncDockHighlight(tab) {
+  document.querySelectorAll(".home-dock-btn[data-dock-tab]").forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.dockTab === tab);
+  });
+}
+
 function applyFeedTabPanel(tab) {
   if (!FEED_TABS.includes(tab)) return;
   activeFeedTab = tab;
@@ -704,6 +710,14 @@ function applyFeedTabPanel(tab) {
     panel.classList.toggle("is-active", on);
     panel.toggleAttribute("hidden", !on);
   });
+
+  if (tab === "feed" || tab === "communities") {
+    syncDockHighlight(tab);
+  } else {
+    document.querySelectorAll(".home-dock-btn[data-dock-tab]").forEach((btn) => {
+      btn.classList.remove("is-active");
+    });
+  }
 
   updateFeedTabActions(tab);
 }
@@ -1462,6 +1476,7 @@ function setupMapUi() {
     e.stopPropagation();
     openMapSheet();
   });
+  $("#dock-feed")?.addEventListener("click", () => setFeedTab("feed", { restoreScroll: true }));
   $("#dock-map")?.addEventListener("click", () => openMapSheet());
   $("#map-sheet-close")?.addEventListener("click", closeAllSheets);
   $("#home-location-btn")?.addEventListener("click", () => openMapSheet());
@@ -1477,6 +1492,12 @@ function setupMapUi() {
       return;
     }
     openCreateSheet();
+  });
+  $("#dock-profile")?.addEventListener("click", () => {
+    $("#home-feed-scroll")?.scrollTo({ top: 0, behavior: "smooth" });
+    const input = $("#display-name-map");
+    input?.focus();
+    input?.select();
   });
 
   $("#map-marker-preview-close")?.addEventListener("click", (e) => {

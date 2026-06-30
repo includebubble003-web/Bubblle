@@ -47,10 +47,11 @@
   --sidebar-w: 340px;
   --text-title: 1.625rem;
   --text-section: 1.25rem;
-  --text-card-title: 1.125rem;
-  --text-body: 0.9375rem;
-  --text-meta: 0.8125rem;
-  --text-time: 0.75rem;
+  --text-card-title: 1.0625rem;
+  --text-body: 0.875rem;
+  --text-meta: 0.75rem;
+  --text-time: 0.6875rem;
+  --text-button: 0.875rem;
 }
 
 body.chat-body {

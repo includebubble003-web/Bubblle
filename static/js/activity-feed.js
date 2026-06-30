@@ -35,6 +35,23 @@ function scoreQuestion(q) {
   return replies * 18 + recency * 55 + distScore * 25 + (replies >= 3 ? 20 : 0);
 }
 
+/** Break long runs of the same type so the feed feels naturally mixed. */
+function mixActivityFeed(sorted) {
+  if (sorted.length <= 2) return sorted;
+  const out = [...sorted];
+  for (let i = 1; i < out.length; i++) {
+    if (out[i].type === out[i - 1].type) {
+      for (let j = i + 1; j < Math.min(i + 6, out.length); j++) {
+        if (out[j].type !== out[i].type) {
+          [out[i], out[j]] = [out[j], out[i]];
+          break;
+        }
+      }
+    }
+  }
+  return out;
+}
+
 export function buildActivityFeed(bubbles = [], questions = [], { mode = "all" } = {}) {
   const items = [];
 
@@ -60,7 +77,7 @@ export function buildActivityFeed(bubbles = [], questions = [], { mode = "all" }
     }
   }
 
-  return items.sort((a, b) => b.score - a.score);
+  return mixActivityFeed(items.sort((a, b) => b.score - a.score));
 }
 
 export function activityFingerprint(item, preview = "") {
@@ -80,23 +97,47 @@ function truncatePreview(text, max = 72) {
 
 function communityHook(b) {
   const users = activeUsers(b);
-  if (users >= 3) return "People are debating:";
-  if (users > 0) return "Latest discussion:";
-  return "Start the conversation:";
+  if (users >= 2) return "Latest discussion";
+  if (users > 0) return "Latest";
+  return "Start the conversation";
 }
 
 function communityMeta(b) {
   const users = activeUsers(b);
-  const parts = [];
-  if (users > 0) parts.push(`${users} active now`);
-  else parts.push("Be the first to join");
-  return parts.join(" · ");
+  if (users > 0) return `${users} ${users === 1 ? "person" : "people"} active`;
+  return "Be the first to join";
 }
 
 function questionHook(q) {
   const replies = Number(q.reply_count) || 0;
-  if (replies > 0) return "Latest:";
+  if (replies > 0) return "Latest reply";
   return "Be the first to answer";
+}
+
+function questionTimeLabel(q) {
+  const ago = fmtTimeAgo(q.last_activity_at || q.created_at);
+  if (!ago) return "Asked recently";
+  return `Asked ${ago}`;
+}
+
+function activityKindLabel(item) {
+  if (item.type === "question") {
+    const q = item.data;
+    const replies = Number(q.reply_count) || 0;
+    const ageHrs = (Date.now() - activityTs(q.created_at)) / 3600000;
+    if (replies >= 5) return "🔥 Trending question";
+    if (replies > 0) return "💬 Active discussion";
+    if (ageHrs < 12) return "❓ New question";
+    return "❓ Question nearby";
+  }
+  const users = activeUsers(item.data);
+  if (users >= 3) return "🔥 Active community";
+  if (users > 0) return "💬 Live chat";
+  return "✨ New community";
+}
+
+function titleWithEmoji(emoji, title, esc) {
+  return `<span class="activity-card-emoji" aria-hidden="true">${emoji}</span> ${esc(title || "")}`;
 }
 
 export function activityCardHtml(item, { escapeHtml, preview = "" } = {}) {
@@ -108,8 +149,8 @@ export function activityCardHtml(item, { escapeHtml, preview = "" } = {}) {
     const q = item.data;
     const emoji = topicIcon(q.title, { kind: "question" });
     const replies = Number(q.reply_count) || 0;
-    const timeLabel = fmtTimeAgo(q.last_activity_at || q.created_at) || "recently";
     const hook = questionHook(q);
+    const kind = activityKindLabel(item);
     const previewLine = previewText
       ? `"${esc(previewText)}"`
       : replies > 0
@@ -117,14 +158,14 @@ export function activityCardHtml(item, { escapeHtml, preview = "" } = {}) {
         : `<span class="activity-card-preview--empty">No answers yet — jump in</span>`;
 
     return `<article class="activity-card activity-card--question" data-activity-key="${esc(item.key)}" data-activity-type="question" data-entity-id="${esc(q.id)}" tabindex="0" role="link">
-      <div class="activity-card-icon" aria-hidden="true">${emoji}</div>
       <div class="activity-card-body">
-        <h3 class="activity-card-title">${esc(q.title || "Question")}</h3>
+        <p class="activity-card-kind">${esc(kind)}</p>
+        <h3 class="activity-card-title">${titleWithEmoji(emoji, q.title || "Question", esc)}</h3>
         <p class="activity-card-hook">${esc(hook)}</p>
         <p class="activity-card-preview">${previewLine}</p>
         <div class="activity-card-meta">
           <span>${esc(fmtReplyCountReplies(replies))}</span>
-          <span>${esc(timeLabel)}</span>
+          <span>${esc(questionTimeLabel(q))}</span>
         </div>
       </div>
       ${joinCta}
@@ -134,6 +175,7 @@ export function activityCardHtml(item, { escapeHtml, preview = "" } = {}) {
   const b = item.data;
   const emoji = topicIcon(b.title, { kind: "community" });
   const hook = communityHook(b);
+  const kind = activityKindLabel(item);
   const previewLine = previewText
     ? `"${esc(previewText)}"`
     : activeUsers(b) > 0
@@ -141,9 +183,9 @@ export function activityCardHtml(item, { escapeHtml, preview = "" } = {}) {
       : `<span class="activity-card-preview--empty">Say hello to the group</span>`;
 
   return `<article class="activity-card activity-card--community" data-activity-key="${esc(item.key)}" data-activity-type="community" data-entity-id="${esc(b.id)}" tabindex="0" role="button">
-    <div class="activity-card-icon" aria-hidden="true">${emoji}</div>
     <div class="activity-card-body">
-      <p class="activity-card-context">${esc(b.title || "Community")}</p>
+      <p class="activity-card-kind">${esc(kind)}</p>
+      <h3 class="activity-card-title">${titleWithEmoji(emoji, b.title || "Community", esc)}</h3>
       <p class="activity-card-hook">${esc(hook)}</p>
       <p class="activity-card-preview">${previewLine}</p>
       <div class="activity-card-meta">
@@ -166,11 +208,14 @@ export function applyActivityCardState(el, item, { escapeHtml, preview = "" } = 
 
   if (item.type === "question") {
     const q = item.data;
+    const emoji = topicIcon(q.title, { kind: "question" });
+    const kindEl = el.querySelector(".activity-card-kind");
     const hookEl = el.querySelector(".activity-card-hook");
     const previewEl = el.querySelector(".activity-card-preview");
     const metaEl = el.querySelector(".activity-card-meta");
     const titleEl = el.querySelector(".activity-card-title");
-    if (titleEl) titleEl.textContent = q.title || "Question";
+    if (kindEl) kindEl.textContent = activityKindLabel(item);
+    if (titleEl) titleEl.innerHTML = titleWithEmoji(emoji, q.title || "Question", esc);
     if (hookEl) hookEl.textContent = questionHook(q);
     if (previewEl) {
       const replies = Number(q.reply_count) || 0;
@@ -181,8 +226,7 @@ export function applyActivityCardState(el, item, { escapeHtml, preview = "" } = 
           : `<span class="activity-card-preview--empty">No answers yet — jump in</span>`;
     }
     if (metaEl) {
-      const timeLabel = fmtTimeAgo(q.last_activity_at || q.created_at) || "recently";
-      metaEl.innerHTML = `<span>${esc(fmtReplyCountReplies(q.reply_count))}</span><span>${esc(timeLabel)}</span>`;
+      metaEl.innerHTML = `<span>${esc(fmtReplyCountReplies(q.reply_count))}</span><span>${esc(questionTimeLabel(q))}</span>`;
     }
     const cta = el.querySelector(".activity-card-cta");
     if (cta) cta.href = questionHref(q.id);
@@ -190,11 +234,14 @@ export function applyActivityCardState(el, item, { escapeHtml, preview = "" } = 
   }
 
   const b = item.data;
-  const contextEl = el.querySelector(".activity-card-context");
+  const emoji = topicIcon(b.title, { kind: "community" });
+  const kindEl = el.querySelector(".activity-card-kind");
+  const titleEl = el.querySelector(".activity-card-title");
   const hookEl = el.querySelector(".activity-card-hook");
   const previewEl = el.querySelector(".activity-card-preview");
   const metaEl = el.querySelector(".activity-card-meta");
-  if (contextEl) contextEl.textContent = b.title || "Community";
+  if (kindEl) kindEl.textContent = activityKindLabel(item);
+  if (titleEl) titleEl.innerHTML = titleWithEmoji(emoji, b.title || "Community", esc);
   if (hookEl) hookEl.textContent = communityHook(b);
   if (previewEl) {
     previewEl.innerHTML = previewText
