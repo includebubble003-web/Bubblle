@@ -23,7 +23,10 @@ import {
 } from "./geo.js";
 import { safeGetItem, safeSetItem } from "./client-state.js";
 import {
+  createQuestionCardElement,
   filterQuestionsBySearch,
+  questionCardMeta,
+  questionFingerprint,
   questionHref,
 } from "./questions.js";
 import { topicIcon } from "./topic-icons.js";
@@ -569,6 +572,45 @@ function syncFeedSection(container, items, { compact = false, allBubbles = items
   });
 }
 
+function onActivityCommunityClick(id) {
+  if (feedSearchModeActive && isMobileSearchLayout()) {
+    completeSearchSelection(id);
+    return;
+  }
+  selectBubble(id, { scroll: false, pan: true });
+}
+
+function syncActivitySection(container, items) {
+  syncOrderedList(container, items, {
+    fingerprint: (item) => activityFingerprint(item),
+    render: (item) => {
+      const el = createActivityCardElement(item, { escapeHtml });
+      bindActivityCard(el, { onCommunityClick: onActivityCommunityClick });
+      return el;
+    },
+    update: (el, item) => applyActivityCardState(el, item, { escapeHtml }),
+    bind: (el) => bindActivityCard(el, { onCommunityClick: onActivityCommunityClick }),
+  });
+  hydrateActivityPreviews(container, items, { escapeHtml });
+}
+
+function renderActivityFeedSection(bubbles, questions) {
+  const items = buildActivityFeed(bubbles, questions, { mode: "all" });
+  const section = $("#feed-activity-section");
+  const container = $("#feed-activity");
+  if (!container) return;
+
+  if (items.length) {
+    section?.removeAttribute("hidden");
+    syncActivitySection(container, items);
+    $("#feed-tab-empty-feed")?.setAttribute("hidden", "hidden");
+  } else {
+    section?.setAttribute("hidden", "hidden");
+    container.replaceChildren();
+    $("#feed-tab-empty-feed")?.removeAttribute("hidden");
+  }
+}
+
 function bindQuestionCard(el) {
   if (!el || el.dataset.bound === "1") return;
   el.dataset.bound = "1";
@@ -584,36 +626,24 @@ function bindQuestionCard(el) {
   });
 }
 
-function activityCardClickHandler(id) {
-  if (feedSearchModeActive && isMobileSearchLayout()) {
-    completeSearchSelection(id);
-    return;
-  }
-  window.location.href = bubbleHref(id);
-}
-
-function syncActivitySection(container, items) {
-  syncOrderedList(container, items, {
-    fingerprint: (item) => activityFingerprint(item),
-    render: (item) => {
-      const el = createActivityCardElement(item, { escapeHtml });
-      bindActivityCard(el, {
-        onCommunityClick: (id) => activityCardClickHandler(id),
-      });
-      return el;
-    },
-    update: (el, item) => applyActivityCardState(el, item, { escapeHtml }),
-    bind: (el) =>
-      bindActivityCard(el, {
-        onCommunityClick: (id) => activityCardClickHandler(id),
-      }),
-  });
-  hydrateActivityPreviews(container, items, { escapeHtml });
-}
-
 function syncQuestionSection(container, items) {
-  const feedItems = buildActivityFeed([], items, { mode: "questions" });
-  syncActivitySection(container, feedItems);
+  syncOrderedList(container, items, {
+    fingerprint: questionFingerprint,
+    render: (q) => createQuestionCardElement(q, { escapeHtml }),
+    update: (el, q) => {
+      const titleEl = el.querySelector(".question-card-title");
+      if (titleEl) titleEl.textContent = q.title || "Question";
+      const answersEl = el.querySelector(".question-card-stat--answers");
+      if (answersEl) {
+        const count = Number(q.reply_count) || 0;
+        answersEl.textContent = `${count} repl${count === 1 ? "y" : "ies"}`;
+      }
+      const footStats = el.querySelectorAll(".question-card-foot .question-card-stat:not(.question-card-stat--answers)");
+      const metaTail = questionCardMeta(q).split(" · ").slice(1).join(" · ");
+      if (footStats[0]) footStats[0].textContent = metaTail;
+    },
+    bind: bindQuestionCard,
+  });
 }
 
 function renderQuestionFeedSection(questions, limit = null) {
@@ -644,16 +674,15 @@ function renderFeedSection(sectionId, containerId, items, options = {}) {
 let feedSearchQuery = "";
 let feedSearchModeActive = false;
 
-const FEED_TABS = ["for-you", "questions", "communities"];
+const FEED_TABS = ["feed", "for-you", "questions", "communities"];
 const FEED_TAB_SWIPE_THRESHOLD = 52;
 const FEED_TAB_SWIPE_MAX_VERTICAL = 48;
 const HERO_DISMISSED_KEY = "bbl_hero_dismissed";
 
-let activeFeedTab = "for-you";
-const feedTabScrollPositions = { "for-you": 0, questions: 0, communities: 0 };
+let activeFeedTab = "feed";
+const feedTabScrollPositions = { feed: 0, "for-you": 0, questions: 0, communities: 0 };
 let feedTabSwipeStart = null;
 let heroDismissListener = null;
-let homeViewMode = "feed";
 
 function setFeedTabsVisible(visible) {
   $("#feed-tabs-wrap")?.toggleAttribute("hidden", !visible);
@@ -740,10 +769,21 @@ function sectionIsVisible(sectionId) {
 }
 
 function updateFeedTabEmptyStates() {
-  const hasActivity = sectionIsVisible("#feed-activity-section");
-  $("#feed-tab-empty-for-you")?.toggleAttribute("hidden", hasActivity);
-  $("#feed-tab-empty-questions")?.toggleAttribute("hidden", hasActivity);
-  $("#feed-tab-empty-communities")?.toggleAttribute("hidden", hasActivity);
+  const feedHas = sectionIsVisible("#feed-activity-section");
+  $("#feed-tab-empty-feed")?.toggleAttribute("hidden", feedHas);
+
+  const forYouHas =
+    sectionIsVisible("#feed-recommended-section") || sectionIsVisible("#feed-discover-section");
+  $("#feed-tab-empty-for-you")?.toggleAttribute("hidden", forYouHas);
+
+  const questionsHas = sectionIsVisible("#feed-questions-section");
+  $("#feed-tab-empty-questions")?.toggleAttribute("hidden", questionsHas);
+
+  const communitiesHas =
+    sectionIsVisible("#feed-nearby-section") ||
+    sectionIsVisible("#feed-trending-section") ||
+    sectionIsVisible("#feed-recent-section");
+  $("#feed-tab-empty-communities")?.toggleAttribute("hidden", communitiesHas);
 }
 
 function feedTabsInteractive() {
@@ -952,83 +992,76 @@ function hideStandardFeedSections() {
   $("#feed-map-questions")?.replaceChildren();
 }
 
-function setHomeViewMode(mode) {
-  if (mode !== "feed" && mode !== "groups") return;
-  homeViewMode = mode;
-  document.querySelectorAll(".home-dock-btn[data-dock-mode]").forEach((btn) => {
-    const on = btn.dataset.dockMode === mode;
-    btn.classList.toggle("is-active", on);
-    if (on) btn.setAttribute("aria-current", "page");
-    else btn.removeAttribute("aria-current");
-  });
-  $("#activity-feed-action")?.toggleAttribute("hidden", mode !== "groups");
-  const bubbles = hooks.getNearbyBubbles?.() || [];
-  const questions = hooks.getNearbyQuestions?.() || [];
-  renderActivityFeed(bubbles, questions);
-  $("#home-feed-scroll")?.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-function renderActivityFeed(bubbles, questions) {
-  const mode = homeViewMode === "groups" ? "communities" : "all";
-  const items = buildActivityFeed(bubbles, questions, { mode });
-  const titleEl = $("#activity-feed-title");
-  if (titleEl) {
-    titleEl.textContent =
-      mode === "communities" ? "👥 Groups Near You" : "🔥 Happening Around You";
-  }
-
-  const section = $("#feed-activity-section");
-  const container = $("#feed-activity");
-  const emptyMsg = $("#activity-feed-empty");
-  if (!container) return;
-
-  if (items.length) {
-    section?.removeAttribute("hidden");
-    emptyMsg?.setAttribute("hidden", "hidden");
-    syncActivitySection(container, items);
-  } else {
-    container.replaceChildren();
-    if (mode === "communities" && bubbles.length === 0) {
-      section?.removeAttribute("hidden");
-      emptyMsg?.removeAttribute("hidden");
-    } else {
-      section?.setAttribute("hidden", "hidden");
-      emptyMsg?.setAttribute("hidden", "hidden");
-    }
-  }
-
-  updateFeedTabEmptyStates();
-}
-
 function renderMapTabDiscover(bubbles, questions) {
   const nearby = sortByDistance(bubbles).slice(0, 6);
-  const communityItems = buildActivityFeed(nearby, [], { mode: "communities" });
-  const section = $("#feed-map-communities-section");
-  const container = $("#feed-map-communities");
-  if (communityItems.length && container) {
-    section?.removeAttribute("hidden");
-    syncActivitySection(container, communityItems);
+  renderFeedSection("#feed-map-communities-section", "#feed-map-communities", nearby, {
+    allBubbles: bubbles,
+  });
+  const qItems = questions.slice(0, 6);
+  if (qItems.length) {
+    $("#feed-map-questions-section")?.removeAttribute("hidden");
+    syncQuestionSection($("#feed-map-questions"), qItems);
   } else {
-    section?.setAttribute("hidden", "hidden");
-    container?.replaceChildren();
-  }
-
-  const qItems = buildActivityFeed([], questions.slice(0, 6), { mode: "questions" });
-  const qSection = $("#feed-map-questions-section");
-  const qContainer = $("#feed-map-questions");
-  if (qItems.length && qContainer) {
-    qSection?.removeAttribute("hidden");
-    syncActivitySection(qContainer, qItems);
-  } else {
-    qSection?.setAttribute("hidden", "hidden");
-    qContainer?.replaceChildren();
+    $("#feed-map-questions-section")?.setAttribute("hidden", "hidden");
+    $("#feed-map-questions")?.replaceChildren();
   }
 }
 
 function renderStandardFeedSections(bubbles, questions) {
-  renderActivityFeed(bubbles, questions);
+  const interests = getUserInterests();
+  const recommended = canShowRecommendations()
+    ? rankRecommendedBubbles(bubbles, interests, 8)
+    : [];
+  const nearbyCommunities = sortByDistance(bubbles).slice(0, 8);
+  const trending = sortByActivity(bubbles.filter((b) => activeUsers(b) >= 2)).slice(0, 8);
+  const trendingIds = new Set(trending.map((b) => b.id));
+  const recent = sortByActivity(
+    bubbles.filter((b) => activeUsers(b) > 0 && !trendingIds.has(b.id)),
+  ).slice(0, 8);
+
+  const featuredIds = new Set([
+    ...recommended.map((b) => b.id),
+    ...nearbyCommunities.map((b) => b.id),
+    ...trending.map((b) => b.id),
+    ...recent.map((b) => b.id),
+  ]);
+  const discover = sortByDistance(bubbles.filter((b) => !featuredIds.has(b.id)));
+
+  const countEl = $("#feed-nearby-count");
+  if (countEl) {
+    const totalActive = bubbles.reduce((s, b) => s + activeUsers(b), 0);
+    if (totalActive > 0) {
+      countEl.textContent = `${totalActive} active people nearby`;
+    } else if (nearbyCommunities.length) {
+      countEl.textContent = `${nearbyCommunities.length} group${nearbyCommunities.length === 1 ? "" : "s"} nearby`;
+    } else {
+      countEl.textContent = "";
+    }
+  }
+
+  renderFeedSection("#feed-recommended-section", "#feed-recommended", recommended, {
+    allBubbles: bubbles,
+    recommended: true,
+  });
+  renderFeedSection("#feed-nearby-section", "#feed-nearby", nearbyCommunities, {
+    allBubbles: bubbles,
+  });
+  renderFeedSection("#feed-trending-section", "#feed-trending", trending, {
+    compact: true,
+    allBubbles: bubbles,
+  });
+  renderFeedSection("#feed-recent-section", "#feed-recent", recent, {
+    allBubbles: bubbles,
+  });
+  renderFeedSection("#feed-discover-section", "#feed-discover", discover, {
+    allBubbles: bubbles,
+  });
+  renderActivityFeedSection(bubbles, questions);
+  renderQuestionFeedSection(questions);
   renderMapTabDiscover(bubbles, questions);
   updateFeedTabCounts(questions, bubbles);
+  updateFeedTabEmptyStates();
+  updateFeedTabActions(activeFeedTab);
 }
 
 function hideSearchResultSections() {
@@ -1073,8 +1106,7 @@ function renderSearchFeed(bubbles, questions, query) {
     $("#feed-search-communities-section")?.removeAttribute("hidden");
     const countEl = $("#feed-search-communities-count");
     if (countEl) countEl.textContent = `${communityResults.length}`;
-    const items = buildActivityFeed(communityResults, [], { mode: "communities" });
-    syncActivitySection($("#feed-search-communities"), items);
+    syncFeedSection($("#feed-search-communities"), communityResults, { allBubbles: bubbles });
   }
 }
 
@@ -1127,7 +1159,8 @@ function renderBubbleFeed(bubbles, questions = hooks.getNearbyQuestions?.() || [
     hideSearchAuxiliarySections();
     document.querySelector(".home-legal-footer")?.removeAttribute("hidden");
     renderStandardFeedSections(bubbles, questions);
-    setFeedTabsVisible(false);
+    setFeedTabsVisible(true);
+    applyFeedTabPanel(activeFeedTab);
 
     const showEmpty = bubbles.length === 0 && questions.length === 0;
     if (emptyEl) emptyEl.hidden = !showEmpty;
@@ -1158,6 +1191,7 @@ function setFeedLoading(loading) {
   if (loading && !feedLoadedOnce) {
     setFeedTabsVisible(false);
     $("#feed-activity-section")?.setAttribute("hidden", "hidden");
+    $("#feed-questions-section")?.setAttribute("hidden", "hidden");
     $("#feed-recommended-section")?.setAttribute("hidden", "hidden");
     $("#feed-nearby-section")?.setAttribute("hidden", "hidden");
     $("#feed-trending-section")?.setAttribute("hidden", "hidden");
@@ -1428,31 +1462,16 @@ function setupMapUi() {
     e.stopPropagation();
     openMapSheet();
   });
-  $("#dock-feed")?.addEventListener("click", () => setHomeViewMode("feed"));
   $("#dock-map")?.addEventListener("click", () => openMapSheet());
   $("#map-sheet-close")?.addEventListener("click", closeAllSheets);
   $("#home-location-btn")?.addEventListener("click", () => openMapSheet());
 
   $("#dock-ask")?.addEventListener("click", () => {
-    if (!hooks.hasPosition?.()) {
-      showOnboarding("Enable location to ask a question nearby.");
-      return;
-    }
+    setFeedTab("questions", { restoreScroll: false });
     openAskQuestionSheet();
   });
-  $("#dock-groups")?.addEventListener("click", () => setHomeViewMode("groups"));
-  $("#dock-me")?.addEventListener("click", () => {
-    document.querySelectorAll(".home-dock-btn[data-dock-mode]").forEach((btn) => {
-      btn.classList.remove("is-active");
-      btn.removeAttribute("aria-current");
-    });
-    $("#home-feed-scroll")?.scrollTo({ top: 0, behavior: "smooth" });
-    const input = $("#display-name-map");
-    input?.focus();
-    input?.select();
-  });
-
-  $("#activity-feed-action")?.addEventListener("click", () => {
+  $("#dock-create")?.addEventListener("click", () => {
+    setFeedTab("communities", { restoreScroll: false });
     if (!hooks.hasPosition?.()) {
       showOnboarding("Enable location to create a community where you are.");
       return;

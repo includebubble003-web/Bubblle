@@ -4,8 +4,7 @@
  * See docs/MAP_ARCHITECTURE.md for domain model and data flow.
  */
 import { activeUsers } from "./bubble-sync.js";
-import { topicIcon } from "./topic-icons.js";
-import { fmtReplyCountReplies } from "./questions.js";
+import { questionHref } from "./questions.js";
 
 /** Fixed pin size (px) — both types render identically on the map. */
 export const MAP_PIN_SIZE = 40;
@@ -97,12 +96,11 @@ export function mapPinHtml(entity, { selected = false, escapeHtml }) {
 }
 
 export function mapPreviewHtml(entity, { escapeHtml }) {
-  const emoji = topicIcon(entity.title, {
-    kind: entity.type === "question" ? "question" : "community",
-  });
+  const emoji = entity.type === "question" ? "❓" : "💬";
 
   if (entity.type === "question") {
-    const meta = fmtReplyCountReplies(entity.replyCount);
+    const n = entity.replyCount;
+    const meta = `${n} ${n === 1 ? "Answer" : "Answers"}`;
     return `<div class="map-preview map-preview--question">
       <div class="map-preview-head">
         <span class="map-preview-emoji" aria-hidden="true">${emoji}</span>
@@ -111,12 +109,13 @@ export function mapPreviewHtml(entity, { escapeHtml }) {
           <p class="map-preview-meta">${escapeHtml(meta)}</p>
         </div>
       </div>
-      <a href="${escapeHtml(entity.href)}" class="map-preview-action">Join →</a>
+      <a href="${escapeHtml(entity.href)}" class="map-preview-action">Open Discussion</a>
     </div>`;
   }
 
   const n = entity.activeUsers;
-  const meta = n > 0 ? `${n} active now` : "Be the first to join";
+  const meta =
+    n > 0 ? `${n} Member${n === 1 ? "" : "s"} Active` : "Be the first to join";
   return `<div class="map-preview map-preview--community">
     <div class="map-preview-head">
       <span class="map-preview-emoji" aria-hidden="true">${emoji}</span>
@@ -125,6 +124,6 @@ export function mapPreviewHtml(entity, { escapeHtml }) {
         <p class="map-preview-meta">${escapeHtml(meta)}</p>
       </div>
     </div>
-    <a href="${escapeHtml(entity.href)}" class="map-preview-action">Join →</a>
+    <a href="${escapeHtml(entity.href)}" class="map-preview-action">Open Community</a>
   </div>`;
 }

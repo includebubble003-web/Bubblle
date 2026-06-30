@@ -241,53 +241,6 @@
   font-size: var(--text-meta);
 }
 
-/* —— Bottom dock: 5 items —— */
-.chat-app--home .home-dock {
-  left: 12px;
-  right: 12px;
-  bottom: max(8px, env(safe-area-inset-bottom));
-  padding: 6px 8px;
-  border-radius: 18px;
-  gap: 2px;
-  transition: transform 0.28s var(--ease), opacity 0.2s var(--ease);
-}
-
-.chat-app--home .home-dock-btn {
-  min-height: 44px;
-  padding: 4px 4px;
-  font-size: 0.625rem;
-  font-weight: 600;
-  gap: 2px;
-  border-radius: 12px;
-  transition: color 0.2s var(--ease), background 0.2s var(--ease), transform 0.12s var(--ease);
-}
-
-.chat-app--home .home-dock-btn:active {
-  transform: scale(0.92);
-}
-
-.chat-app--home .home-dock-btn.is-active {
-  color: var(--accent);
-}
-
-.chat-app--home .home-dock-btn.is-active .icon {
-  color: var(--accent);
-}
-
-.chat-app--home .home-dock-btn--primary {
-  flex: 0 0 50px;
-  width: 50px;
-  height: 50px;
-  margin-top: -16px;
-  box-shadow: 0 4px 16px rgba(255, 107, 53, 0.32);
-  transition: transform 0.14s var(--ease), box-shadow 0.14s var(--ease);
-}
-
-.chat-app--home .home-dock-btn--primary:active {
-  transform: scale(0.9);
-  box-shadow: 0 2px 10px rgba(255, 107, 53, 0.28);
-}
-
 /* —— Skeleton —— */
 .bubble-card-skeleton {
   height: 88px;
@@ -295,26 +248,22 @@
   margin-bottom: 8px;
 }
 
-/* —— Search sections use same cards —— */
+.chat-app--home .home-map-btn {
+  display: flex;
+}
+
+/* —— Search empty states —— */
 .feed-search-empty-title {
   font-size: var(--text-section);
   font-weight: 600;
 }
 
-.chat-app--home .home-map-btn {
-  display: none;
-}
-
-.activity-feed-empty {
-  margin: 8px 0 0;
-  padding: 20px 16px;
-  text-align: center;
+.feed-search-empty-lead {
   font-size: var(--text-body);
-  color: var(--text-muted);
-  line-height: 1.5;
 }
 
-.activity-feed-empty strong {
-  color: var(--accent);
-  font-weight: 600;
+/* —— Four-tab layout —— */
+.chat-app--home .feed-tab {
+  font-size: 0.8125rem;
+  padding: 8px 4px 10px;
 }

@@ -290,6 +290,12 @@ export function bindActivityCard(el, { onCommunityClick } = {}) {
   el.addEventListener("keydown", (e) => {
     if (e.key !== "Enter" && e.key !== " ") return;
     e.preventDefault();
+    const type = el.dataset.activityType;
+    const id = el.dataset.entityId;
+    if (type === "community" && onCommunityClick) {
+      onCommunityClick(id);
+      return;
+    }
     const cta = el.querySelector(".activity-card-cta");
     if (cta?.href) go(cta.href);
   });
